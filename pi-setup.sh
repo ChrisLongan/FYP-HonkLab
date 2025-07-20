@@ -53,18 +53,18 @@ else
     echo "✔️ RTL-SDR driver already blacklisted."
 fi
 
-# ---------------------------------------------
-# Python packages from requirements.txt
-# ---------------------------------------------
-if [ -f "Requirement.txt" ]; then
-    echo "📦 Installing Python packages..."
-    pip3 install -r Requirement.txt
-    if [ $? -ne 0 ]; then
-        echo "⚠️ Some Python packages failed to install, but continuing..."
-    fi
-else
-    echo "⚠️ Requirement.txt not found. Skipping pip installs."
-fi
+# # ---------------------------------------------
+# # Python packages from requirements.txt
+# # ---------------------------------------------
+# if [ -f "Requirement.txt" ]; then
+#     echo "📦 Installing Python packages..."s
+#     pip3 install -r Requirement.txt
+#     if [ $? -ne 0 ]; then
+#         echo "⚠️ Some Python packages failed to install, but continuing..."
+#     fi
+# else
+#     echo "⚠️ Requirement.txt not found. Skipping pip installs."
+# fi
 
 # ---------------------------------------------
 # Enable SPI1 (for CC1101)
