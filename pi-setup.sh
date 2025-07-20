@@ -40,11 +40,11 @@ fi
 # ---------------------------------------------
 # Python packages from requirements.txt
 # ---------------------------------------------
-if [ -f "requirements.txt" ]; then
+if [ -f "Requirement.txt" ]; then
     echo "📦 Installing Python packages..."
-    pip3 install -r requirements.txt
+    pip3 install -r Requirement.txt
 else
-    echo "⚠️ requirements.txt not found. Skipping pip installs."
+    echo "⚠️ Requirement.txt not found. Skipping pip installs."
 fi
 
 # ---------------------------------------------
@@ -61,10 +61,3 @@ fi
 
 echo "✅ Setup complete! Please reboot if this is the first time."
 
-
-
-# ---------------------------------------------
-# Using on Pi
-# ---------------------------------------------
-chmod +x pi-setup.sh
-./pi-setup.sh
