@@ -1,44 +1,65 @@
-import bitbangspi
+# softwarespi.py
 import RPi.GPIO as GPIO
 import time
 
-# GPIO Pins (BCM Mode)
-SCK  = 21
-MOSI = 20
-MISO = 19
-CSN  = 18
-GDO0 = 26
-GDO2 = 16
+class SoftwareSPI:
+    def __init__(self, sck=21, mosi=20, miso=19, csn=18, gdo0=26, gdo2=16):
+        self.SCK = sck
+        self.MOSI = mosi
+        self.MISO = miso
+        self.CSN = csn
+        self.GDO0 = gdo0
+        self.GDO2 = gdo2
 
-# Setup GPIO for GDO monitoring
-GPIO.setmode(GPIO.BCM)
-GPIO.setup(GDO0, GPIO.IN)
-GPIO.setup(GDO2, GPIO.IN)
+        GPIO.setmode(GPIO.BCM)
+        GPIO.setwarnings(False)
 
-# Initialize software SPI
-spi = bitbangspi.SPI(
-    sclk=SCK,
-    mosi=MOSI,
-    miso=MISO,
-    cs=CSN
-)
-spi.set_speed_hz(500000)
+        # Setup SPI lines
+        GPIO.setup(self.SCK, GPIO.OUT)
+        GPIO.setup(self.MOSI, GPIO.OUT)
+        GPIO.setup(self.MISO, GPIO.IN)
+        GPIO.setup(self.CSN, GPIO.OUT)
 
-print("🔁 Sending SRES (Reset Strobe)...")
-response = spi.transfer([0x30, 0x00])
-print("SRES Response:", response)
+        # Setup GDO lines
+        GPIO.setup(self.GDO0, GPIO.IN)
+        GPIO.setup(self.GDO2, GPIO.IN)
 
-# Read version register (0x0D)
-version_reg = 0x0D | 0x80  # 0x8D for read
-version_resp = spi.transfer([version_reg, 0x00])
-print("📟 CC1101 Version Register:", hex(version_resp[1]))
+        # Initialize lines
+        GPIO.output(self.SCK, GPIO.LOW)
+        GPIO.output(self.MOSI, GPIO.LOW)
+        GPIO.output(self.CSN, GPIO.HIGH)
 
-# Read GDO lines
-gdo0_val = GPIO.input(GDO0)
-gdo2_val = GPIO.input(GDO2)
-print(f"📡 GDO0 (GPIO {GDO0}) State: {'HIGH' if gdo0_val else 'LOW'}")
-print(f"📡 GDO2 (GPIO {GDO2}) State: {'HIGH' if gdo2_val else 'LOW'}")
+    def transfer(self, data):
+        """Transfer a list of bytes and return the response from MISO."""
+        result = []
+        GPIO.output(self.CSN, GPIO.LOW)
+        time.sleep(0.001)
 
-# Cleanup
-spi.close()
-GPIO.cleanup()
+        for byte in data:
+            received = 0
+            for i in range(8):
+                bit_out = (byte >> (7 - i)) & 1
+                GPIO.output(self.MOSI, bit_out)
+                GPIO.output(self.SCK, GPIO.HIGH)
+                time.sleep(0.00001)
+
+                bit_in = GPIO.input(self.MISO)
+                received |= (bit_in << (7 - i))
+
+                GPIO.output(self.SCK, GPIO.LOW)
+                time.sleep(0.00001)
+
+            result.append(received)
+
+        GPIO.output(self.CSN, GPIO.HIGH)
+        return result
+
+    def read_gdo0(self):
+        return GPIO.input(self.GDO0)
+
+    def read_gdo2(self):
+        return GPIO.input(self.GDO2)
+
+    def cleanup(self):
+        GPIO.cleanup()
+
