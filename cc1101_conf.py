@@ -63,3 +63,10 @@ class SoftwareSPI:
     def cleanup(self):
         GPIO.cleanup()
 
+    def write_register(self, address, value):
+        """Write a single byte to a CC1101 register."""
+        self.transfer([address, value])
+
+    def write_burst(self, address, values):
+        """Write multiple bytes starting at a register address (burst mode)."""
+        self.transfer([address | 0x40] + values)
