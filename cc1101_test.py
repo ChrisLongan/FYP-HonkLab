@@ -15,7 +15,7 @@
 
 # spi.close()
 
-from softwarespi import SoftwareSPI
+from cc1101_conf import SoftwareSPI
 import time
 
 spi = SoftwareSPI()
