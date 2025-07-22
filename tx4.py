@@ -1,0 +1,81 @@
+# tx_debug_loop.py
+from cc1101_conf import SoftwareSPI
+import time
+import RPi.GPIO as GPIO
+
+spi = SoftwareSPI()
+
+def setup_cc1101():
+    print("[*] Resetting CC1101...")
+    spi.transfer([0x30])  # SRES
+    time.sleep(0.1)
+
+    print("[*] Reading VERSION register...")
+    version = spi.transfer([0x8D, 0x00])  # 0x8D = READ | 0x0D
+    print("[+] VERSION register response:", version)
+    
+    if version[1] == 0x14 or version[1] == 0x1E or version[1] == 0x0F:
+        print("[✓] CC1101 responded — SPI communication OK")
+    else:
+        print("[✗] No valid CC1101 response. Check wiring.")
+        return
+
+    print("[*] Writing config for 433.92 MHz, 2-FSK...")
+    config = {
+        0x02: 0x06,  # FREQ2
+        0x03: 0x21,  # FREQ1
+        0x04: 0x65,  # FREQ0 = 433.92 MHz
+        0x0B: 0x06,  # CHANNR
+        0x0D: 0x34,  # FSCTRL1
+        0x0E: 0x0C,  # FSCTRL0
+        0x10: 0x45,  # MDMCFG4
+        0x11: 0x43,  # MDMCFG3
+        0x12: 0x03,  # MDMCFG2 - 2-FSK, no Manchester
+        0x13: 0x22,  # DEVIATN
+        0x14: 0x07,  # MCSM2
+        0x15: 0x0C,  # MCSM1 - TX after strobe
+        0x17: 0x3E,  # PKTLEN = 62 bytes
+        0x18: 0x04,  # PKTCTRL1
+        0x19: 0x05,  # PKTCTRL0
+    }
+
+    for reg, val in config.items():
+        spi.write_register(reg, val)
+        time.sleep(0.003)
+
+    print("[+] CC1101 configured.")
+
+def send_debug_burst(i):
+    print(f"\n[*] Sending burst {i+1}/10...")
+
+    # 62-byte pattern: 0xAA55 alternating
+    payload = []
+    for _ in range(31):
+        payload.extend([0xAA, 0x55])
+
+    spi.write_burst(0x3F, payload)
+    spi.transfer([0x35])  # STX (Start TX)
+
+    print("[>] Packet sent")
+    
+    for j in range(10):
+        gdo0 = spi.read_gdo0()
+        print(f"GDO0[{j}] =", gdo0)
+        time.sleep(0.05)  # Poll GDO0 quickly
+
+try:
+    setup_cc1101()
+    print("[*] Starting debug TX loop...")
+
+    for i in range(10):
+        send_debug_burst(i)
+        time.sleep(0.3)
+
+    print("[✓] Debug TX loop finished.")
+
+except KeyboardInterrupt:
+    print("\n[!] Interrupted.")
+
+finally:
+    spi.cleanup()
+    GPIO.cleanup()
