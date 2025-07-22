@@ -33,7 +33,7 @@ try:
     logo_img = ctk.CTkImage(light_image=Image.open("logo.png"), size=(60, 60))
     logo_button = ctk.CTkButton(master=root, image=logo_img, text="", width=70, height=70, command=logo_pressed)
 except:
-    logo_button = ctk.CTkButton(master=root, text="RYGELOCK", font=("Arial", 14), command=logo_pressed, width=100, height=40)
+    logo_button = ctk.CTkButton(master=root, text="HonkLab", font=("Arial", 14), command=logo_pressed, width=100, height=40)
 
 logo_button.place(x=10, y=10)
 
