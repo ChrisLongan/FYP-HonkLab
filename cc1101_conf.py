@@ -29,9 +29,35 @@ class SoftwareSPI:
         GPIO.output(self.MOSI, GPIO.LOW)
         GPIO.output(self.CSN, GPIO.HIGH)
 
+    # def transfer(self, data):
+    #     """Transfer a list of bytes and return the response from MISO."""
+    #     result = []
+    #     GPIO.output(self.CSN, GPIO.LOW)
+    #     time.sleep(0.001)
+
+    #     for byte in data:
+    #         received = 0
+    #         for i in range(8):
+    #             bit_out = (byte >> (7 - i)) & 1
+    #             GPIO.output(self.MOSI, bit_out)
+    #             GPIO.output(self.SCK, GPIO.HIGH)
+    #             time.sleep(0.00001)
+
+    #             bit_in = GPIO.input(self.MISO)
+    #             received |= (bit_in << (7 - i))
+
+    #             GPIO.output(self.SCK, GPIO.LOW)
+    #             time.sleep(0.00001)
+
+    #         result.append(received)
+
+    #     GPIO.output(self.CSN, GPIO.HIGH)
+    #     return result
+
     def transfer(self, data):
-        """Transfer a list of bytes and return the response from MISO."""
         result = []
+
+        print("[DEBUG] Pulling CSN LOW")
         GPIO.output(self.CSN, GPIO.LOW)
         time.sleep(0.001)
 
@@ -42,15 +68,13 @@ class SoftwareSPI:
                 GPIO.output(self.MOSI, bit_out)
                 GPIO.output(self.SCK, GPIO.HIGH)
                 time.sleep(0.00001)
-
                 bit_in = GPIO.input(self.MISO)
                 received |= (bit_in << (7 - i))
-
                 GPIO.output(self.SCK, GPIO.LOW)
                 time.sleep(0.00001)
-
             result.append(received)
 
+        print("[DEBUG] Pulling CSN HIGH")
         GPIO.output(self.CSN, GPIO.HIGH)
         return result
 
