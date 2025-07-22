@@ -93,7 +93,8 @@ try:
     setup_cc1101()
     print("[*] Starting TX loop (every 0.5s)...")
     while True:
-        send_burst()
+        #send_burst()
+        send_long_burst()
         time.sleep(0.5)
 
 except KeyboardInterrupt:
