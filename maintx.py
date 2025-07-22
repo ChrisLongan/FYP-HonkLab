@@ -1,23 +1,37 @@
 from softspi import CC1101
+import RPi.GPIO as GPIO
 import time
 
-cc = CC1101(sck=21, mosi=20, miso=19, csn=12, gdo0=26, gdo2=16)
+# === Initialize CC1101 on software SPI pins ===
+cc = CC1101(
+    sck=21,
+    mosi=20,
+    miso=19,
+    csn=12,       # You said you're using GPIO 12 for CSN
+    gdo0=26,      # GDO0 pin (used to confirm TX activity)
+    gdo2=16       # Optional
+)
 
+# === Reset and initialize CC1101 ===
 cc.reset()
 cc.init()
-cc.set_frequency(433.92)
-print("FREQ2:", hex(cc.read_register(0x0D)))
-print("FREQ1:", hex(cc.read_register(0x0E)))
-print("FREQ0:", hex(cc.read_register(0x0F)))
 
-cc.set_modulation('ASK_OOK')  # or '2-FSK'
-cc.set_power_level(0)         # 0 = max, 7 = min
+# === Configure TX parameters ===
+cc.set_frequency(433.92)         # Frequency in MHz
+cc.set_modulation('ASK_OOK')     # Or '2-FSK'
+cc.set_power_level(0)            # Max TX power (0 = strongest)
 
-# Replace with your real signal
-payload = [0xA2, 0xF1, 0xD0] * 20
+# === Define payload ===
+payload = [0xAA] * 32            # Alternating bit pattern (visible on SDR)
 
-# Send in a loop
-for _ in range(10):
+# === Transmission loop ===
+print("[INFO] Starting transmission loop...\n")
+for i in range(10):
+    print(f"[{i+1}] Sending payload...")
     cc.send_data(payload)
-    print("Signal sent.")
+    
+    # Read and print GDO0 immediately after TX
+    gdo0_state = GPIO.input(26)
+    print(f"[DEBUG] GDO0 state after TX: {gdo0_state}\n")
+    
     time.sleep(1)

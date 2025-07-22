@@ -49,6 +49,13 @@ class CC1101:
         self.spi_write(value)
         GPIO.output(self.CSN, GPIO.HIGH)
 
+    def read_register(self, addr):
+        GPIO.output(self.CSN, GPIO.LOW)
+        self.spi_write(addr | 0x80)  # Read flag
+        val = self.spi_read()
+        GPIO.output(self.CSN, GPIO.HIGH)
+        return val
+
     def send_strobe(self, strobe):
         GPIO.output(self.CSN, GPIO.LOW)
         self.spi_write(strobe)
@@ -68,7 +75,7 @@ class CC1101:
     def init(self):
         self.write_register(0x0B, 0x06)  # FSCTRL1
         self.write_register(0x0D, 0x21)  # FREQ2
-        self.write_register(0x0E, 0x65)  # FREQ1
+        self.write_register(0x0E, 0xB0)  # FREQ1
         self.write_register(0x0F, 0x6A)  # FREQ0
         self.write_register(0x10, 0xF5)  # MDMCFG4
         self.write_register(0x11, 0x83)  # MDMCFG3
@@ -85,6 +92,9 @@ class CC1101:
         self.write_register(0x24, 0x2A)  # FSCAL2
         self.write_register(0x25, 0x00)  # FSCAL1
         self.write_register(0x26, 0x1F)  # FSCAL0
+
+        # GDO0: assert during TX (sync word sent)
+        self.write_register(0x02, 0x06)
 
     def set_frequency(self, freq_mhz):
         f = int((freq_mhz * 1000000.0) / (26.0e6 / (1 << 16)))
@@ -109,12 +119,5 @@ class CC1101:
             self.spi_write(byte)
         GPIO.output(self.CSN, GPIO.HIGH)
         self.send_strobe(0x35)  # STX
-        time.sleep(0.05)  # Allow time to transmit
+        time.sleep(0.05)        # allow TX time
         self.send_strobe(0x36)  # SIDLE
-        
-    def read_register(self, addr):
-        GPIO.output(self.CSN, GPIO.LOW)
-        self.spi_write(addr | 0x80)  # Read flag
-        val = self.spi_read()
-        GPIO.output(self.CSN, GPIO.HIGH)
-        return val
