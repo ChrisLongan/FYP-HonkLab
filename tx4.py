@@ -63,7 +63,7 @@ def send_debug_burst(i):
     # 62-byte alternating pattern
     payload = []
     for _ in range(31):
-        payload.extend([0xAA, 0x55])
+        payload.extend([0xA2, 0xF1, 0xD0])
 
     spi.write_burst(0x3F, payload)
     time.sleep(0.005)
