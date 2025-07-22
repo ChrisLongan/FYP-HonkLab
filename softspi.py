@@ -113,11 +113,15 @@ class CC1101:
         self.write_register(0x3E, table[level])
 
     def send_data(self, data):
+        self.send_strobe(0x3B)  # SFTX - flush TX FIFO
+        time.sleep(0.001)
+
         GPIO.output(self.CSN, GPIO.LOW)
         self.spi_write(0x7F)  # TX FIFO burst
         for byte in data:
             self.spi_write(byte)
         GPIO.output(self.CSN, GPIO.HIGH)
+
         self.send_strobe(0x35)  # STX
         time.sleep(0.05)        # allow TX time
         self.send_strobe(0x36)  # SIDLE
