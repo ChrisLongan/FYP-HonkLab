@@ -59,7 +59,15 @@ class CC1101:
     def send_strobe(self, strobe):
         GPIO.output(self.CSN, GPIO.LOW)
         self.spi_write(strobe)
+        status = self.spi_read()
         GPIO.output(self.CSN, GPIO.HIGH)
+        print(f"[DEBUG] STROBE 0x{strobe:02X} → status byte: 0x{status:02X}")
+        return status
+
+    def get_marc_state(self):
+        state = self.read_register(0x35) & 0x1F
+        print(f"[DEBUG] MARCSTATE: 0x{state:02X}")
+        return state
 
     def reset(self):
         GPIO.output(self.CSN, GPIO.HIGH)
@@ -95,6 +103,7 @@ class CC1101:
 
         # GDO0: assert during TX (sync word sent)
         self.write_register(0x02, 0x06)
+        print(f"[DEBUG] IOCFG0 (GDO0 config) = 0x{self.read_register(0x02):02X}")
 
     def set_frequency(self, freq_mhz):
         f = int((freq_mhz * 1000000.0) / (26.0e6 / (1 << 16)))
@@ -122,6 +131,9 @@ class CC1101:
             self.spi_write(byte)
         GPIO.output(self.CSN, GPIO.HIGH)
 
+        print(f"[DEBUG] Sent {len(data)} bytes to TX FIFO")
+
         self.send_strobe(0x35)  # STX
         time.sleep(0.05)        # allow TX time
+        self.get_marc_state()   # show current state
         self.send_strobe(0x36)  # SIDLE
