@@ -1,5 +1,5 @@
 # tx_loop_debug.py
-from softwarespi import SoftwareSPI
+from cc1101_conf import SoftwareSPI
 import time
 import RPi.GPIO as GPIO
 
