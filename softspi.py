@@ -123,6 +123,7 @@ class CC1101:
         self.spi_write(0x7E)  # PATABLE burst write
         self.spi_write(table[level])
         GPIO.output(self.CSN, GPIO.HIGH)
+        time.sleep(0.01)  # Delay to ensure PA table latches properly
         print(f"[DEBUG] PATABLE loaded with: 0x{table[level]:02X}")
 
     def send_data(self, data):
