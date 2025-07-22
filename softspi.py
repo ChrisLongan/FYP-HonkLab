@@ -120,11 +120,10 @@ class CC1101:
     def set_power_level(self, level):
         table = [0xC0, 0xC3, 0xC6, 0xC9, 0xCC, 0xCF, 0x12, 0x03]  # PA table
         GPIO.output(self.CSN, GPIO.LOW)
-        self.spi_write(0x7E)  # Burst write to PATABLE
+        self.spi_write(0x7E)  # PATABLE burst write
         self.spi_write(table[level])
         GPIO.output(self.CSN, GPIO.HIGH)
         print(f"[DEBUG] PATABLE loaded with: 0x{table[level]:02X}")
-
 
     def send_data(self, data):
         self.send_strobe(0x3B)  # SFTX - flush TX FIFO
