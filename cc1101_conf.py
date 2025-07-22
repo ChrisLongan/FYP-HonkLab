@@ -20,44 +20,17 @@ class SoftwareSPI:
         GPIO.setup(self.MISO, GPIO.IN)
         GPIO.setup(self.CSN, GPIO.OUT)
 
-        # Setup GDO lines
-        GPIO.setup(self.GDO0, GPIO.IN)
-        GPIO.setup(self.GDO2, GPIO.IN)
+        # Setup GDO lines with internal pull-downs
+        GPIO.setup(self.GDO0, GPIO.IN, pull_up_down=GPIO.PUD_DOWN)
+        GPIO.setup(self.GDO2, GPIO.IN, pull_up_down=GPIO.PUD_DOWN)
 
         # Initialize lines
         GPIO.output(self.SCK, GPIO.LOW)
         GPIO.output(self.MOSI, GPIO.LOW)
         GPIO.output(self.CSN, GPIO.HIGH)
 
-    # def transfer(self, data):
-    #     """Transfer a list of bytes and return the response from MISO."""
-    #     result = []
-    #     GPIO.output(self.CSN, GPIO.LOW)
-    #     time.sleep(0.001)
-
-    #     for byte in data:
-    #         received = 0
-    #         for i in range(8):
-    #             bit_out = (byte >> (7 - i)) & 1
-    #             GPIO.output(self.MOSI, bit_out)
-    #             GPIO.output(self.SCK, GPIO.HIGH)
-    #             time.sleep(0.00001)
-
-    #             bit_in = GPIO.input(self.MISO)
-    #             received |= (bit_in << (7 - i))
-
-    #             GPIO.output(self.SCK, GPIO.LOW)
-    #             time.sleep(0.00001)
-
-    #         result.append(received)
-
-    #     GPIO.output(self.CSN, GPIO.HIGH)
-    #     return result
-
     def transfer(self, data):
         result = []
-
-        print("[DEBUG] Pulling CSN LOW")
         GPIO.output(self.CSN, GPIO.LOW)
         time.sleep(0.001)
 
@@ -74,7 +47,6 @@ class SoftwareSPI:
                 time.sleep(0.00001)
             result.append(received)
 
-        print("[DEBUG] Pulling CSN HIGH")
         GPIO.output(self.CSN, GPIO.HIGH)
         return result
 
@@ -94,3 +66,9 @@ class SoftwareSPI:
     def write_burst(self, address, values):
         """Write multiple bytes starting at a register address (burst mode)."""
         self.transfer([address | 0x40] + values)
+
+    def set_gdo_config(self, gdo0_val=0x06, gdo2_val=0x2E):
+        """Set GDO0 and GDO2 output function using IOCFGx registers."""
+        self.write_register(0x02, gdo0_val)  # IOCFG0 (GDO0)
+        self.write_register(0x00, gdo2_val)  # IOCFG2 (GDO2)
+        print(f"[✓] GDO0 set to 0x{gdo0_val:02X}, GDO2 set to 0x{gdo2_val:02X}")
