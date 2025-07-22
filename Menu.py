@@ -15,11 +15,11 @@ root.resizable(False, False)
 
 # === Callback Functions ===
 def logo_pressed():
-    show_toast(root, "Logo!")
+    show_toast(root, "Logo", type="info")
     print("Logo button pressed")
 
 def replay_attack():
-    show_toast(root, "Replay attack triggered!")
+    show_toast(root, "Replay started", type="warning")
     print("Replay Attack triggered")
 
 def relay_attack():
