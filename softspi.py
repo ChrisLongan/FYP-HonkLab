@@ -127,27 +127,37 @@ class CC1101:
         print(f"[DEBUG] PATABLE loaded with: 0x{table[level]:02X}")
 
     def send_data(self, data):
-        self.send_strobe(0x3B)  # SFTX - flush TX FIFO
-        time.sleep(0.001)
+        self.strobe(0x36)  # SIDLE
+        time.sleep(0.01)
 
-        GPIO.output(self.CSN, GPIO.LOW)
-        self.spi_write(0x7F)  # TX FIFO burst
-        for byte in data:
-            self.spi_write(byte)
-        GPIO.output(self.CSN, GPIO.HIGH)
+        self.strobe(0x3A)  # SFTX (Flush TX FIFO)
+        time.sleep(0.01)
 
-        print(f"[DEBUG] Sent {len(data)} bytes to TX FIFO")
+        retries = 1
+        for attempt in range(retries + 1):
+            self.spi_write_burst(0x3F, data)  # Write data to TX FIFO
+            self.strobe(0x35)  # STX
+            time.sleep(0.05)
 
-        self.send_strobe(0x35)  # STX
-        time.sleep(0.05)
+            marcstate = self.read_register(0x35) & 0x1F
+            print(f"[DEBUG] MARCSTATE: {hex(marcstate)}")
 
-        # Smart TX recovery logic
-        marc = self.get_marc_state()
-        if marc == 0x00 or marc == 0x1F:
-            print("[WARN] TX failed or underflow. Resetting radio...")
-            self.reset()
-            self.init()
-            self.set_power_level(0)  # reload PATABLE
-            return self.send_data(data)  # Retry once after reinit
+            if marcstate in (0x00, 0x1F):  # IDLE or TX FIFO underflow
+                print(f"[WARN] TX failed (MARCSTATE={hex(marcstate)}). Attempt {attempt + 1} of {retries + 1}")
+                if attempt < retries:
+                    print("[INFO] Resetting radio...")
+                    self.reset()
+                    self.init()
+                    self.set_frequency(433.92)
+                    self.set_modulation("ASK_OOK")
+                    self.set_power_level(0)
+                    time.sleep(0.05)
+                    continue
+                else:
+                    print("[ERROR] TX failed after retry. Aborting.\n")
+                    return
+            else:
+                break
 
-        self.send_strobe(0x36)  # SIDLE
+        gdo0_state = GPIO.input(self.GDO0)
+        print(f"[DEBUG] GDO0 state after TX: {gdo0_state}")
