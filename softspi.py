@@ -111,3 +111,10 @@ class CC1101:
         self.send_strobe(0x35)  # STX
         time.sleep(0.05)  # Allow time to transmit
         self.send_strobe(0x36)  # SIDLE
+        
+    def read_register(self, addr):
+        GPIO.output(self.CSN, GPIO.LOW)
+        self.spi_write(addr | 0x80)  # Read flag
+        val = self.spi_read()
+        GPIO.output(self.CSN, GPIO.HIGH)
+        return val

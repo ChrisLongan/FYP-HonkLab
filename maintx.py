@@ -1,7 +1,7 @@
 from softspi import CC1101
 import time
 
-cc = CC1101(sck=21, mosi=20, miso=19, csn=18, gdo0=26, gdo2=16)
+cc = CC1101(sck=21, mosi=20, miso=19, csn=12, gdo0=26, gdo2=16)
 
 cc.reset()
 cc.init()
