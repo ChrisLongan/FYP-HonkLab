@@ -14,11 +14,15 @@ def setup_cc1101():
     version = spi.transfer([0x8D, 0x00])  # 0x8D = READ | 0x0D
     print("[+] VERSION register response:", version)
     
-    if version[1] == 0x14 or version[1] == 0x1E or version[1] == 0x0F:
+    if version[1] in [0x14, 0x1E, 0x0F, 0x30]:
         print("[✓] CC1101 responded — SPI communication OK")
     else:
         print("[✗] No valid CC1101 response. Check wiring.")
         return
+
+    print("[*] Forcing CC1101 to IDLE state...")
+    spi.transfer([0x36])  # SIDLE
+    time.sleep(0.05)
 
     print("[*] Writing config for 433.92 MHz, 2-FSK...")
     config = {
@@ -43,25 +47,35 @@ def setup_cc1101():
         spi.write_register(reg, val)
         time.sleep(0.003)
 
+    print("[*] Re-entering IDLE to finalize config...")
+    spi.transfer([0x36])  # SIDLE
+    time.sleep(0.05)
+
     print("[+] CC1101 configured.")
 
 def send_debug_burst(i):
     print(f"\n[*] Sending burst {i+1}/10...")
 
-    # 62-byte pattern: 0xAA55 alternating
+    # Force flush TX FIFO before writing new payload
+    spi.transfer([0x3B])  # SFTX
+    time.sleep(0.01)
+
+    # 62-byte alternating pattern
     payload = []
     for _ in range(31):
         payload.extend([0xAA, 0x55])
 
     spi.write_burst(0x3F, payload)
-    spi.transfer([0x35])  # STX (Start TX)
+    time.sleep(0.005)
 
-    print("[>] Packet sent")
-    
+    spi.transfer([0x35])  # STX
+    print("[>] STX sent - transmitting...")
+
+    # Poll GDO0 to confirm transmission activity
     for j in range(10):
         gdo0 = spi.read_gdo0()
         print(f"GDO0[{j}] =", gdo0)
-        time.sleep(0.05)  # Poll GDO0 quickly
+        time.sleep(0.05)
 
 try:
     setup_cc1101()
@@ -69,12 +83,12 @@ try:
 
     for i in range(10):
         send_debug_burst(i)
-        time.sleep(0.3)
+        time.sleep(0.5)
 
     print("[✓] Debug TX loop finished.")
 
 except KeyboardInterrupt:
-    print("\n[!] Interrupted.")
+    print("\n[!] Interrupted by user.")
 
 finally:
     spi.cleanup()
