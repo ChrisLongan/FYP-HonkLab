@@ -48,25 +48,46 @@ def setup_cc1101():
 
     print("[+] CC1101 configured.")
 
-def send_burst():
-    print("[*] Sending TX burst...")
+# def send_burst():
+#     print("[*] Sending TX burst...")
 
-    # Make sure CC1101 is in IDLE before writing FIFO
-    spi.transfer([0x36])  # SIDLE
-    time.sleep(0.01)
+#     # Make sure CC1101 is in IDLE before writing FIFO
+#     spi.transfer([0x36])  # SIDLE
+#     time.sleep(0.01)
 
-    # Payload (4 bytes of pattern)
-    packet = [0xAA, 0x55, 0xAA, 0x55]
-    spi.write_burst(0x3F, packet)  # Write to TX FIFO
-    time.sleep(0.005)
+#     # Payload (4 bytes of pattern)
+#     packet = [0xAA, 0x55, 0xAA, 0x55]
+#     spi.write_burst(0x3F, packet)  # Write to TX FIFO
+#     time.sleep(0.005)
 
-    spi.transfer([0x35])  # STX - start transmission
-    print("[+] STX strobe sent")
+#     spi.transfer([0x35])  # STX - start transmission
+#     print("[+] STX strobe sent")
 
-    # Optional: check GDO0
-    print("  GDO0:", spi.read_gdo0())
-    print("[>] Packet sent.\n")
-    time.sleep(0.2)
+#     # Optional: check GDO0
+#     print("  GDO0:", spi.read_gdo0())
+#     print("[>] Packet sent.\n")
+#     time.sleep(0.2)
+
+def send_long_burst():
+    print("[*] Sending long repetitive bursts...")
+
+    pattern = [0xAA, 0x55] * 30  # 60 bytes (max for TX FIFO)
+    fifo_payload = [len(pattern)] + pattern  # First byte = length
+
+    for burst in range(10):  # Repeat 10 times for longer signal
+        spi.transfer([0x36])  # SIDLE
+        time.sleep(0.002)
+
+        spi.write_burst(0x3F, fifo_payload)
+        time.sleep(0.002)
+
+        spi.transfer([0x35])  # STX
+        print(f"[>] Burst {burst + 1}/10 sent")
+
+        # Optional: check GDO0 status
+        for i in range(5):
+            print(f"  GDO0[{i}]:", spi.read_gdo0())
+            time.sleep(0.005)
 
 try:
     setup_cc1101()
