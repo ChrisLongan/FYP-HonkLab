@@ -1,9 +1,9 @@
 import customtkinter as ctk
 import threading
 
-def show_toast(root, message, duration=2, type="info", sound=False):
+def show_toast(root, message, duration=2, type="info"):
     def _toast():
-        # Type → color and icon map
+        # Color & icon map
         colors = {
             "info":    ("#2E86C1", "ℹ️"),
             "success": ("#27AE60", "✅"),
@@ -13,32 +13,25 @@ def show_toast(root, message, duration=2, type="info", sound=False):
 
         bg_color, icon = colors.get(type, ("#34495E", "🔔"))
 
-        # Toast window
+        # Create toast window
         toast = ctk.CTkToplevel(root)
-        toast.overrideredirect(True)
-        toast.attributes("-topmost", True)
+        toast.overrideredirect(True)             # Removes window frame & controls
+        toast.attributes("-topmost", True)       # Stay on top
 
-        # Dimensions
+        # Size and position (top-right of 480x320 screen)
         width, height = 200, 40
         x = root.winfo_screenwidth() - width - 10
         y = 10
         toast.geometry(f"{width}x{height}+{x}+{y}")
 
-        # Background color using CTkFrame workaround
-        frame = ctk.CTkFrame(toast, fg_color=bg_color, corner_radius=8)
+        # Frame and label
+        frame = ctk.CTkFrame(toast, fg_color=bg_color, corner_radius=10)
         frame.pack(expand=True, fill="both")
 
-        # Message label
-        label = ctk.CTkLabel(
-            master=frame,
-            text=f"{icon} {message}",
-            text_color="white",
-            font=("Arial", 13)
-        )
-        label.pack(expand=True, fill="both", padx=10)
+        label = ctk.CTkLabel(frame, text=f"{icon} {message}", font=("Arial", 13), text_color="white")
+        label.pack(expand=True, padx=8, pady=4)
 
-        # Auto-close
+        # Auto-destroy
         toast.after(duration * 1000, toast.destroy)
 
-    # Run it in a thread to avoid freezing the GUI
     threading.Thread(target=_toast, daemon=True).start()
