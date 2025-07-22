@@ -38,6 +38,7 @@ def send_burst():
     packet = [0x04, 0xAA, 0x55, 0xAA, 0x55]
     spi.write_burst(0x3F, packet)
     spi.transfer([0x35])  # STX
+    print("GDO0:", spi.read_gdo0())
     print("[>] Packet sent")
     time.sleep(0.2)
 
