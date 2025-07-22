@@ -1,6 +1,7 @@
 import customtkinter as ctk
 import tkinter as tk
 from PIL import Image
+from Notification import show_toast
 
 # Set CustomTkinter theme
 ctk.set_appearance_mode("Dark")
@@ -14,9 +15,11 @@ root.resizable(False, False)
 
 # === Callback Functions ===
 def logo_pressed():
+    show_toast(root, "Logo!")
     print("Logo button pressed")
 
 def replay_attack():
+    show_toast(root, "Replay attack triggered!")
     print("Replay Attack triggered")
 
 def relay_attack():
