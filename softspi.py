@@ -139,6 +139,15 @@ class CC1101:
         print(f"[DEBUG] Sent {len(data)} bytes to TX FIFO")
 
         self.send_strobe(0x35)  # STX
-        time.sleep(0.05)        # allow TX time
-        self.get_marc_state()   # show current state
+        time.sleep(0.05)
+
+        # Smart TX recovery logic
+        marc = self.get_marc_state()
+        if marc == 0x00 or marc == 0x1F:
+            print("[WARN] TX failed or underflow. Resetting radio...")
+            self.reset()
+            self.init()
+            self.set_power_level(0)  # reload PATABLE
+            return self.send_data(data)  # Retry once after reinit
+
         self.send_strobe(0x36)  # SIDLE
