@@ -30,8 +30,9 @@ class RFToolkitApp(ctk.CTk):
 
     def show_attack_menu(self):
         self.clear_frame()
-        self.current_frame = AttackMenu(self, 
-                                        on_back=self.show_main_menu)
+        self.current_frame = AttackMenu(self,
+                                            on_back=self.show_main_menu,
+                                            on_replay_callback=self.show_replay_menu)
         self.current_frame.pack(fill="both", expand=True)
 
     def show_replay_menu(self):
@@ -39,7 +40,6 @@ class RFToolkitApp(ctk.CTk):
         self.current_frame = ReplayGUI(self, 
                                        on_back_callback=self.show_attack_menu)
         self.current_frame.pack(fill="both", expand=True)
-
 
     def show_simulation_menu(self):
         self.clear_frame()
