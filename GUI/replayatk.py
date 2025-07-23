@@ -9,26 +9,21 @@ class ReplayGUI(ctk.CTkFrame):
         self.configure(fg_color="#1E1E1E", width=480, height=320)
 
         # Title
-        self.label = ctk.CTkLabel(self, text="Replay Attack", font=ctk.CTkFont(size=16, weight="bold"))
-        self.label.pack(pady=5)
+        ctk.CTkLabel(self, text="Replay Attack", font=ctk.CTkFont(size=16, weight="bold")).pack(pady=5)
 
         # File selection
         self.file_path = ctk.StringVar()
-        self.file_button = ctk.CTkButton(self, text="Browse File", font=ctk.CTkFont(size=12), command=self.browse_file)
-        self.file_button.pack(pady=3)
+        ctk.CTkButton(self, text="Browse File", font=ctk.CTkFont(size=12), command=self.browse_file).pack(pady=3)
 
         # Decoder buttons
-        self.ook_button = ctk.CTkButton(self, text="OOK Decode", font=ctk.CTkFont(size=12),
-                                        command=lambda: self.run_decoder("ook"))
-        self.ook_button.pack(pady=2)
+        ctk.CTkButton(self, text="OOK Decode", font=ctk.CTkFont(size=12),
+                      command=lambda: self.run_decoder("ook")).pack(pady=2)
 
-        self.fsk_button = ctk.CTkButton(self, text="FSK Decode", font=ctk.CTkFont(size=12),
-                                        command=lambda: self.run_decoder("fsk"))
-        self.fsk_button.pack(pady=2)
+        ctk.CTkButton(self, text="FSK Decode", font=ctk.CTkFont(size=12),
+                      command=lambda: self.run_decoder("fsk")).pack(pady=2)
 
-        self.keeloq_button = ctk.CTkButton(self, text="KeeLoq Brute", font=ctk.CTkFont(size=12),
-                                           command=lambda: self.run_decoder("keeloq"))
-        self.keeloq_button.pack(pady=2)
+        ctk.CTkButton(self, text="KeeLoq Brute", font=ctk.CTkFont(size=12),
+                      command=lambda: self.run_decoder("keeloq")).pack(pady=2)
 
         # Output box
         self.output_box = ctk.CTkTextbox(self, height=80, font=ctk.CTkFont(size=10))
@@ -36,8 +31,7 @@ class ReplayGUI(ctk.CTkFrame):
 
         # Back button
         if self.on_back_callback:
-            self.back_button = ctk.CTkButton(self, text="⬅ Back", command=self.on_back_callback, font=ctk.CTkFont(size=12))
-            self.back_button.pack(pady=5)
+            ctk.CTkButton(self, text="⬅ Back", command=self.on_back_callback, font=ctk.CTkFont(size=12)).pack(pady=5)
 
     def browse_file(self):
         path = filedialog.askopenfilename(filetypes=[("Signal Files", "*.txt *.npy")])
