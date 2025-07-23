@@ -1,7 +1,7 @@
 from replayatk import ReplayGUI
 import customtkinter as ctk
 from PIL import Image
-from GUI.noti import show_toast
+from noti import show_toast
 
 ctk.set_appearance_mode("Dark")
 ctk.set_default_color_theme("blue")
