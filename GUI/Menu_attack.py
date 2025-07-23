@@ -1,7 +1,7 @@
 import customtkinter as ctk
 import tkinter as tk
 from PIL import Image
-from Notification import show_toast
+from GUI.Notification import show_toast
 
 # Set CustomTkinter theme
 ctk.set_appearance_mode("Dark")

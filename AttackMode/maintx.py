@@ -1,4 +1,4 @@
-from cc1101_softspi import CC1101
+from AttackMode.cc1101_softspi import CC1101
 import RPi.GPIO as GPIO
 import time
 
