@@ -3,11 +3,12 @@ from PIL import Image
 from noti import show_toast
 
 class AttackMenu(ctk.CTkFrame):
-    def __init__(self, master, on_back=None, on_replay_callback=None):
-        super().__init__(master, fg_color="transparent")
-
+    def __init__(self, master, on_back=None, on_replay=None):
+        super().__init__(master)
+        self.master = master
         self.on_back = on_back
-        self.on_replay_callback = on_replay_callback
+        self.on_replay = on_replay
+        self.configure(fg_color="#1E1E1E")
 
         try:
             logo_img = ctk.CTkImage(light_image=Image.open("logo.png"), size=(60, 60))
