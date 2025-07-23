@@ -2,7 +2,7 @@ import customtkinter as ctk
 from mainmenu import MainMenu
 from replayatk import ReplayGUI 
 from attackmenu import AttackMenu  
-from simmenu import AttackMenu  
+from simmenu import SimulationTab 
 
 # === Main Application Window ===
 class RFToolkitApp(ctk.CTk):
@@ -29,7 +29,6 @@ class RFToolkitApp(ctk.CTk):
         self.current_frame.pack(fill="both", expand=True)
 
     def show_attack_menu(self):
-        from Attack_Menu_Gui import AttackMenu  # Lazy import
         self.clear_frame()
         self.current_frame = AttackMenu(self, on_back=self.show_main_menu)
         self.current_frame.pack(fill="both", expand=True)
@@ -41,12 +40,12 @@ class RFToolkitApp(ctk.CTk):
 
     def show_simulation_menu(self):
         self.clear_frame()
-        self.current_frame = SimulationMenu(self, on_back=self.show_main_menu)
+        self.current_frame = SimulationTab(self, on_back=self.show_main_menu)
         self.current_frame.pack(fill="both", expand=True)
 
     def show_about_info(self):
         ctk.CTkMessagebox(title="About HonkLab",
-                          message="HonkLab RF Toolkit\nCreated by ChrisDaDragon\nAutomotive RF Pentesting Education",
+                          message="HonkLab RF Toolkit\nCreated by ChrisDragon\nAutomotive RF Pentesting Education",
                           icon="info")
 
 if __name__ == "__main__":

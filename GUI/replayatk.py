@@ -52,9 +52,9 @@ class ReplayGUI(ctk.CTkFrame):
             return
 
         script = {
-            "ook": "ook_decoder_with_log.py",
-            "fsk": "fsk_decoder_with_log.py",
-            "keeloq": "keeloq_multiproc_with_log.py"
+            "ook": "~/FYP-HonkLab/AttackMode/decoder_ook.py",
+            "fsk": "~/FYP-HonkLab/AttackMode/decoder_fsk.py",
+            "keeloq": "~/FYP-HonkLab/AttackMode/decoder_keeloq.py"
         }.get(mode)
 
         if not script:
