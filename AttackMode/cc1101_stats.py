@@ -15,7 +15,7 @@
 
 # spi.close()
 
-from cc1101_softspi import SoftwareSPI
+from AttackMode.cc1101_softspi import SoftwareSPI
 import time
 
 spi = SoftwareSPI()

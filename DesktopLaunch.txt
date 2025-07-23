@@ -1,0 +1,10 @@
+nano ~/Desktop/HonkLabLauncher.desktop
+
+[Desktop Entry]
+Name=HonkLab
+Comment=Launches the GUI
+Exec=python3 /home/pi/FYP-HonkLab/Gui\ Launcher\ App.py
+Icon=/home/pi/FYP-HonkLab/logo.png
+Terminal=false
+Type=Application
+Categories=Utility;
