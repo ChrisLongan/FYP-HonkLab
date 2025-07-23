@@ -52,9 +52,9 @@ class ReplayGUI(ctk.CTkFrame):
             return
 
         script = {
-            "ook": "~/FYP-HonkLab/AttackMode/decoder_ook.py",
-            "fsk": "~/FYP-HonkLab/AttackMode/decoder_fsk.py",
-            "keeloq": "~/FYP-HonkLab/AttackMode/decoder_keeloq.py"
+            "ook": "/home/pi/FYP-HonkLab/AttackMode/decoder_ook.py",
+            "fsk": "/home/pi/FYP-HonkLab/AttackMode/decoder_fsk.py",
+            "keeloq": "/home/pi/FYP-HonkLab/AttackMode/decoder_keeloq.py"
         }.get(mode)
 
         if not script:
@@ -67,4 +67,3 @@ class ReplayGUI(ctk.CTkFrame):
             self.output_box.insert("end", output + "\n")
         except subprocess.CalledProcessError as e:
             self.output_box.insert("end", f"\n[ERROR]\n{e.output}\n")
-
