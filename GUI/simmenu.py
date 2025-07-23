@@ -67,6 +67,6 @@ class SimulationTab(ctk.CTkFrame):
 
     def launch_signal_viewer(self):
         try:
-            subprocess.Popen(["python3", "/home/pi/FYP-HonkLab/Simulation/signalcap.py"])
+            subprocess.Popen(["python3", "/home/pi/FYP-HonkLab/SimulationMode/signalcap.py"])
         except Exception as e:
             print(f"[ERROR] Failed to launch viewer: {e}")
