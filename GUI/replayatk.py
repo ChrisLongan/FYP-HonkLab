@@ -34,33 +34,33 @@ class ReplayGUI(ctk.CTkFrame):
         if self.on_back_callback:
             ctk.CTkButton(self, text="⬅ Back", command=self.on_back_callback).pack(pady=5)
 
-    def browse_file(self):
-        path = filedialog.askopenfilename(filetypes=[("Signal Files", "*.txt *.npy")])
-        if path:
-            self.file_path.set(path)
-            self.output_box.insert("end", f"\n✔ File selected: {path}\n")
+    # def browse_file(self):
+    #     path = filedialog.askopenfilename(filetypes=[("Signal Files", "*.txt *.npy")])
+    #     if path:
+    #         self.file_path.set(path)
+    #         self.output_box.insert("end", f"\n✔ File selected: {path}\n")
 
-    def run_decoder(self, mode):
-        file = self.file_path.get()
-        if not file:
-            self.output_box.insert("end", "\n[ERROR] Please select a signal file first.\n")
-            return
+    # def run_decoder(self, mode):
+    #     file = self.file_path.get()
+    #     if not file:
+    #         self.output_box.insert("end", "\n[ERROR] Please select a signal file first.\n")
+    #         return
 
-        decoder_scripts = {
-            "ook": "/home/pi/FYP-HonkLab/AttackMode/decoder_ook.py",
-            "fsk": "/home/pi/FYP-HonkLab/AttackMode/decoder_fsk.py",
-            "keeloq": "/home/pi/FYP-HonkLab/AttackMode/decoder_keeloq.py"
-        }
+    #     decoder_scripts = {
+    #         "ook": "/home/pi/FYP-HonkLab/AttackMode/decoder_ook.py",
+    #         "fsk": "/home/pi/FYP-HonkLab/AttackMode/decoder_fsk.py",
+    #         "keeloq": "/home/pi/FYP-HonkLab/AttackMode/decoder_keeloq.py"
+    #     }
 
-        script_path = decoder_scripts.get(mode)
-        if not script_path or not os.path.isfile(script_path):
-            self.output_box.insert("end", f"\n[ERROR] Decoder script not found for mode: {mode}\n")
-            return
+    #     script_path = decoder_scripts.get(mode)
+    #     if not script_path or not os.path.isfile(script_path):
+    #         self.output_box.insert("end", f"\n[ERROR] Decoder script not found for mode: {mode}\n")
+    #         return
 
-        self.output_box.insert("end", f"\n▶ Running {mode.upper()} decoder...\n")
-        try:
-            result = subprocess.check_output(["python3", script_path], stderr=subprocess.STDOUT, text=True)
-            self.output_box.insert("end", result + "\n")
-        except subprocess.CalledProcessError as e:
-            self.output_box.insert("end", f"\n[ERROR] Decoder failed:\n{e.output}\n")
+    #     self.output_box.insert("end", f"\n▶ Running {mode.upper()} decoder...\n")
+    #     try:
+    #         result = subprocess.check_output(["python3", script_path], stderr=subprocess.STDOUT, text=True)
+    #         self.output_box.insert("end", result + "\n")
+    #     except subprocess.CalledProcessError as e:
+    #         self.output_box.insert("end", f"\n[ERROR] Decoder failed:\n{e.output}\n")
 
