@@ -21,7 +21,7 @@ def signalview():
 
         # === Signal Capture ===
         print("[INFO] Reading samples...")
-        samples = sdr.read_samples(256 * 1024)
+        samples = sdr.read_samples(1*1024*1024)
         sdr.close()
 
         if len(samples) == 0:
