@@ -1,162 +1,263 @@
-from cc1101_softspi import CC1101
 import RPi.GPIO as GPIO
 import time
 
-def test_power_and_signals():
-    """Test CC1101 power and control signals"""
-    print("CC1101 Power and Signal Test")
+class CC1101_Working:
+    """CC1101 driver using ONLY the timing/method that actually worked"""
+    
+    def __init__(self, sck, mosi, miso, csn, gdo0, gdo2):
+        self.SCK = sck
+        self.MOSI = mosi
+        self.MISO = miso
+        self.CSN = csn
+        self.GDO0 = gdo0
+        self.GDO2 = gdo2
+
+        GPIO.setmode(GPIO.BCM)
+        GPIO.setwarnings(False)
+
+        GPIO.setup(self.SCK, GPIO.OUT)
+        GPIO.setup(self.MOSI, GPIO.OUT)
+        GPIO.setup(self.MISO, GPIO.IN)
+        GPIO.setup(self.CSN, GPIO.OUT)
+        GPIO.setup(self.GDO0, GPIO.IN)
+        GPIO.setup(self.GDO2, GPIO.IN)
+
+        GPIO.output(self.SCK, GPIO.LOW)
+        GPIO.output(self.MOSI, GPIO.LOW)
+        GPIO.output(self.CSN, GPIO.HIGH)
+
+    def working_spi_write(self, byte):
+        """SPI write using EXACT timing from working manual test"""
+        for i in range(8):
+            GPIO.output(self.SCK, GPIO.LOW)
+            time.sleep(0.001)  # Exact 1ms from working test
+            GPIO.output(self.MOSI, (byte & (1 << (7 - i))) != 0)
+            time.sleep(0.001)
+            GPIO.output(self.SCK, GPIO.HIGH)
+            time.sleep(0.001)
+        GPIO.output(self.SCK, GPIO.LOW)
+
+    def working_spi_read(self):
+        """SPI read using EXACT timing from working manual test"""
+        value = 0
+        for i in range(8):
+            GPIO.output(self.SCK, GPIO.HIGH)
+            time.sleep(0.001)  # Exact 1ms from working test
+            if GPIO.input(self.MISO):
+                value |= (1 << (7 - i))
+            GPIO.output(self.SCK, GPIO.LOW)
+            time.sleep(0.001)
+        return value
+
+    def working_reset(self):
+        """Reset using EXACT sequence from working manual test"""
+        print("[DEBUG] Using working reset sequence...")
+        
+        # Exact sequence that worked
+        GPIO.output(self.CSN, GPIO.HIGH)
+        time.sleep(0.1)
+        GPIO.output(self.CSN, GPIO.LOW)
+        time.sleep(0.01)
+        GPIO.output(self.CSN, GPIO.HIGH)
+        time.sleep(0.05)
+        
+        # Send SRES with working timing
+        GPIO.output(self.CSN, GPIO.LOW)
+        self.working_spi_write(0x30)  # SRES
+        GPIO.output(self.CSN, GPIO.HIGH)
+        time.sleep(0.1)  # Wait after reset
+
+    def working_read_register(self, addr):
+        """Read register using EXACT method that worked"""
+        GPIO.output(self.CSN, GPIO.LOW)
+        time.sleep(0.001)
+        
+        # Use 0xF0 | addr for burst read (like working test used 0xF1)
+        self.working_spi_write(0xF0 | (addr & 0x0F))
+        val = self.working_spi_read()
+        
+        time.sleep(0.001)
+        GPIO.output(self.CSN, GPIO.HIGH)
+        return val
+
+    def working_write_register(self, addr, value):
+        """Write register using working timing"""
+        GPIO.output(self.CSN, GPIO.LOW)
+        time.sleep(0.001)
+        self.working_spi_write(addr)
+        self.working_spi_write(value)
+        time.sleep(0.001)
+        GPIO.output(self.CSN, GPIO.HIGH)
+
+    def test_communication(self):
+        """Test communication using working method"""
+        print("[INFO] Testing communication with working method...")
+        
+        self.working_reset()
+        
+        # Try VERSION read exactly like working test
+        version = self.working_read_register(0x01)  # 0xF1 = 0xF0 | 0x01
+        print(f"[DEBUG] VERSION register: 0x{version:02X}")
+        
+        if version == 0x14:
+            print("[SUCCESS] ✅ CC1101 responding correctly!")
+            return True
+        else:
+            print(f"[FAILED] ❌ Got 0x{version:02X}, expected 0x14")
+            return False
+
+    def send_strobe_working(self, strobe):
+        """Send strobe command using working timing"""
+        GPIO.output(self.CSN, GPIO.LOW)
+        time.sleep(0.001)
+        self.working_spi_write(strobe)
+        status = self.working_spi_read()
+        time.sleep(0.001)
+        GPIO.output(self.CSN, GPIO.HIGH)
+        print(f"[DEBUG] STROBE 0x{strobe:02X} → status: 0x{status:02X}")
+        return status
+
+    def basic_init(self):
+        """Initialize with minimal, essential registers only"""
+        print("[INFO] Basic CC1101 initialization...")
+        
+        if not self.test_communication():
+            print("[ERROR] Communication failed - cannot initialize")
+            return False
+        
+        try:
+            # Only essential registers for 433MHz ASK/OOK
+            self.working_write_register(0x0D, 0x21)  # FREQ2
+            self.working_write_register(0x0E, 0xB0)  # FREQ1  
+            self.working_write_register(0x0F, 0x6A)  # FREQ0 (433.92 MHz)
+            
+            self.working_write_register(0x12, 0x30)  # ASK/OOK modulation
+            self.working_write_register(0x18, 0x16)  # MCSM0
+            
+            # Power setting
+            GPIO.output(self.CSN, GPIO.LOW)
+            time.sleep(0.001)
+            self.working_spi_write(0x7E)  # PATABLE
+            self.working_spi_write(0x03)  # Max power
+            time.sleep(0.001)
+            GPIO.output(self.CSN, GPIO.HIGH)
+            
+            print("[SUCCESS] ✅ Basic initialization complete")
+            return True
+            
+        except Exception as e:
+            print(f"[ERROR] Initialization failed: {e}")
+            return False
+
+    def send_data_working(self, data):
+        """Send data using working timing"""
+        print(f"[INFO] Sending {len(data)} bytes...")
+        
+        # Go to idle
+        self.send_strobe_working(0x36)  # SIDLE
+        time.sleep(0.01)
+        
+        # Flush TX FIFO
+        self.send_strobe_working(0x3A)  # SFTX
+        time.sleep(0.01)
+        
+        # Load data into FIFO
+        GPIO.output(self.CSN, GPIO.LOW)
+        time.sleep(0.001)
+        self.working_spi_write(0x7F)  # TX FIFO burst write
+        for byte in data:
+            self.working_spi_write(byte)
+        time.sleep(0.001)
+        GPIO.output(self.CSN, GPIO.HIGH)
+        
+        # Start transmission
+        self.send_strobe_working(0x35)  # STX
+        time.sleep(0.1)  # Wait for transmission
+        
+        # Check result
+        gdo0_state = GPIO.input(self.GDO0)
+        print(f"[DEBUG] GDO0 after TX: {gdo0_state}")
+        
+        return True
+
+def test_working_driver():
+    """Test the working driver"""
+    print("CC1101 Working Driver Test")
     print("=" * 40)
     
-    cc = CC1101(21, 20, 19, 12, 26, 16)
+    # Initialize using working method
+    cc = CC1101_Working(21, 20, 19, 12, 26, 16)
     
-    print("Testing control signals...")
-    print()
-    
-    # Test 1: CSN Control
-    print("1. Testing CSN (Chip Select) control:")
-    for i in range(3):
-        GPIO.output(cc.CSN, GPIO.HIGH)
-        csn_high = GPIO.input(cc.CSN)
-        time.sleep(0.1)
-        
-        GPIO.output(cc.CSN, GPIO.LOW) 
-        csn_low = GPIO.input(cc.CSN)
-        time.sleep(0.1)
-        
-        print(f"   Test {i+1}: CSN HIGH={csn_high}, LOW={csn_low}")
-    
-    # Test 2: Check GDO pins (these should respond if CC1101 has power)
-    print("\n2. Testing GDO pins (should change if CC1101 powered):")
-    
-    # Reset sequence - GDO pins should change if CC1101 is alive
-    GPIO.output(cc.CSN, GPIO.HIGH)
-    time.sleep(0.1)
-    gdo0_before = GPIO.input(cc.GDO0)
-    gdo2_before = GPIO.input(cc.GDO2)
-    
-    print(f"   Before reset: GDO0={gdo0_before}, GDO2={gdo2_before}")
-    
-    # Try reset
-    cc.reset()
-    time.sleep(0.2)
-    
-    gdo0_after = GPIO.input(cc.GDO0)
-    gdo2_after = GPIO.input(cc.GDO2)
-    
-    print(f"   After reset:  GDO0={gdo0_after}, GDO2={gdo2_after}")
-    
-    if gdo0_before != gdo0_after or gdo2_before != gdo2_after:
-        print("   ✓ GDO pins changed - CC1101 might be powered!")
+    # Test communication
+    if cc.test_communication():
+        # Initialize for transmission
+        if cc.basic_init():
+            # Test transmission
+            test_data = [0xAA, 0x55, 0xAA, 0x55]
+            
+            print("\nTesting data transmission...")
+            for i in range(3):
+                print(f"Transmission {i+1}/3...")
+                cc.send_data_working(test_data)
+                time.sleep(1)
+            
+            print("\n✅ All tests passed!")
+            return cc
+        else:
+            print("❌ Initialization failed")
+            return None
     else:
-        print("   ✗ GDO pins didn't change - power issue likely")
-    
-    # Test 3: Extended reset sequence
-    print("\n3. Testing extended power-on reset:")
-    
-    # Power cycle simulation
-    GPIO.output(cc.CSN, GPIO.LOW)
-    time.sleep(0.01)
-    GPIO.output(cc.CSN, GPIO.HIGH) 
-    time.sleep(0.1)  # Wait longer for power stabilization
-    
-    # Check if MISO goes low briefly (sign of CC1101 reset)
-    print("   Monitoring MISO during reset...")
-    
-    GPIO.output(cc.CSN, GPIO.LOW)
-    cc.spi_write(0x30)  # SRES command
-    
-    # Monitor MISO for changes during command
-    miso_states = []
-    for i in range(10):
-        miso_states.append(GPIO.input(cc.MISO))
-        time.sleep(0.001)
-    
-    GPIO.output(cc.CSN, GPIO.HIGH)
-    time.sleep(0.1)
-    
-    print(f"   MISO states during reset: {miso_states}")
-    
-    if any(state == 0 for state in miso_states):
-        print("   ✓ MISO went low - CC1101 responded!")
-    else:
-        print("   ✗ MISO stayed high - CC1101 not responding")
-    
-    # Test 4: Try reading VERSION with very slow timing
-    print("\n4. Testing with very slow SPI timing:")
-    
-    # Manual super-slow SPI read
-    GPIO.output(cc.CSN, GPIO.LOW)
-    time.sleep(0.001)  # 1ms delay
-    
-    # Send 0xF1 (VERSION register read with burst bit)
-    command = 0xF1
-    for bit in range(8):
-        GPIO.output(cc.SCK, GPIO.LOW)
-        time.sleep(0.001)
-        GPIO.output(cc.MOSI, (command & (1 << (7 - bit))) != 0)
-        time.sleep(0.001)
-        GPIO.output(cc.SCK, GPIO.HIGH)
-        time.sleep(0.001)
-    
-    GPIO.output(cc.SCK, GPIO.LOW)
-    time.sleep(0.001)
-    
-    # Read response very slowly
-    version = 0
-    print("   Slow read bits: ", end="")
-    for bit in range(8):
-        GPIO.output(cc.SCK, GPIO.HIGH)
-        time.sleep(0.001)
-        bit_val = GPIO.input(cc.MISO)
-        print(bit_val, end="")
-        if bit_val:
-            version |= (1 << (7 - bit))
-        GPIO.output(cc.SCK, GPIO.LOW)
-        time.sleep(0.001)
-    
-    GPIO.output(cc.CSN, GPIO.HIGH)
-    print(f"\n   Slow VERSION result: 0x{version:02X}")
-    
-    return version
+        print("❌ Communication test failed")
+        return None
 
-def power_diagnosis():
-    """Provide power diagnosis based on test results"""
+def send_custom_bits(cc, bit_string):
+    """Send your custom bit pattern using working driver"""
+    if cc is None:
+        print("❌ CC1101 not initialized")
+        return
+    
     print("\n" + "=" * 40)
-    print("DIAGNOSIS AND NEXT STEPS")
+    print("SENDING CUSTOM BIT PATTERN")
     print("=" * 40)
     
-    print("\nSince MISO responds to pull-up/down but reads 0 in communication:")
-    print()
-    print("Most likely issues (in order):")
-    print("1. 🔋 POWER: CC1101 not getting stable 3.3V")
-    print("2. 🔌 GROUND: Missing or loose ground connection") 
-    print("3. 📶 CSN: Chip Select not working properly")
-    print("4. ⚡ MOSI: Data line to CC1101 broken")
-    print("5. 🕐 TIMING: SPI timing too fast")
-    print()
-    print("IMMEDIATE ACTIONS TO TRY:")
-    print("📋 1. Check CC1101 power LED (if it has one)")
-    print("📋 2. Verify VCC wire goes to 3.3V (NOT 5V)")
-    print("📋 3. Check ground wire connection")
-    print("📋 4. Try different jumper wires")
-    print("📋 5. Measure voltage with multimeter if available")
-
-# Run the test
-try:
-    version = test_power_and_signals()
+    # Convert bits to bytes
+    bit_string = bit_string.replace(' ', '')
+    while len(bit_string) % 8 != 0:
+        bit_string = '0' + bit_string
     
-    if version == 0x14:
-        print("\n🎉 SUCCESS! CC1101 is now responding!")
-        print("The slow timing worked - your SPI was too fast.")
-    elif version != 0x00:
-        print(f"\n⚠️  Got response 0x{version:02X} but not expected 0x14")
-        print("CC1101 is powered but may have issues.")
-    else:
-        power_diagnosis()
+    bytes_list = []
+    for i in range(0, len(bit_string), 8):
+        byte_chunk = bit_string[i:i+8]
+        byte_value = int(byte_chunk, 2)
+        bytes_list.append(byte_value)
+    
+    print(f"Bit pattern: {bit_string}")
+    print(f"Bytes: {[hex(b) for b in bytes_list]}")
+    print()
+    
+    # Send multiple times
+    for i in range(5):
+        print(f"Custom transmission {i+1}/5...")
+        cc.send_data_working(bytes_list)
+        time.sleep(0.1)
+    
+    print("✅ Custom bit pattern sent!")
 
-except Exception as e:
-    print(f"\nError during test: {e}")
-    power_diagnosis()
-
-finally:
-    GPIO.cleanup()
+# Main test
+if __name__ == "__main__":
+    try:
+        # Test the working driver
+        working_cc = test_working_driver()
+        
+        if working_cc:
+            # Send your custom bit pattern
+            your_bits = "1000111010001110100010001000111011101110111011101110111010001110100011101110111010001000100011101"
+            send_custom_bits(working_cc, your_bits)
+            
+    except KeyboardInterrupt:
+        print("\nStopped by user")
+    except Exception as e:
+        print(f"Error: {e}")
+    finally:
+        GPIO.cleanup()
+        print("GPIO cleanup complete")
