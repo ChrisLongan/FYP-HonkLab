@@ -3,120 +3,195 @@ from cc1101_softspi import CC1101
 import RPi.GPIO as GPIO
 import time
 
-def send_ook_bits_raw(cc1101, bit_string, bit_duration_us=500):
-    """
-    Send OOK bits by manually controlling the CC1101 carrier
-    This bypasses packet mode and directly controls TX on/off
-    """
-    print(f"Sending {len(bit_string)} bits with {bit_duration_us}μs per bit")
-    print(f"Bit pattern: {bit_string}")
+def test_spi_communication(cc):
+    """Test basic SPI communication with CC1101"""
+    print("=" * 60)
+    print("CC1101 SPI COMMUNICATION TEST")
+    print("=" * 60)
     
-    # Configure for continuous TX mode
-    cc1101.write_register(0x08, 0x12)  # PKTCTRL0 - disable packet mode
-    cc1101.write_register(0x12, 0x30)  # MDMCFG2 - ASK/OOK, no sync
-    cc1101.write_register(0x02, 0x2F)  # IOCFG0 - high impedance when idle
+    # Test 1: Check VERSION register multiple times
+    print("\n1. Testing VERSION register (should be 0x14):")
+    for i in range(5):
+        version = cc.read_register(0x31)
+        print(f"   Attempt {i+1}: VERSION = 0x{version:02X}")
+        time.sleep(0.1)
     
-    # Start continuous TX
-    cc1101.send_strobe(0x35)  # STX
+    # Test 2: Test write/read to a writable register
+    print("\n2. Testing write/read to FSCTRL1 register (0x07):")
+    original = cc.read_register(0x07)
+    print(f"   Original value: 0x{original:02X}")
+    
+    # Write test values and read back
+    test_values = [0xAA, 0x55, 0x00, 0xFF]
+    for test_val in test_values:
+        cc.write_register(0x07, test_val)
+        readback = cc.read_register(0x07)
+        status = "✓ PASS" if readback == test_val else "✗ FAIL"
+        print(f"   Write 0x{test_val:02X} → Read 0x{readback:02X} {status}")
+    
+    # Restore original value
+    cc.write_register(0x07, original)
+    
+    # Test 3: Test strobe commands
+    print("\n3. Testing strobe commands:")
+    strobes = [0x30, 0x36, 0x34]  # SRES, SIDLE, SRX
+    for strobe in strobes:
+        status = cc.send_strobe(strobe)
+        print(f"   Strobe 0x{strobe:02X} → Status: 0x{status:02X}")
+    
+    # Test 4: Check pin states
+    print("\n4. GPIO Pin States:")
+    print(f"   CSN:  {GPIO.input(cc.CSN)}")
+    print(f"   GDO0: {GPIO.input(cc.GDO0)}")
+    print(f"   GDO2: {GPIO.input(cc.GDO2)}")
+    print(f"   MISO: {GPIO.input(cc.MISO)}")
+
+def test_pin_wiring(cc):
+    """Test individual pin connections"""
+    print("\n" + "=" * 60)
+    print("PIN WIRING TEST")
+    print("=" * 60)
+    
+    print("\nTesting CSN (Chip Select) control:")
+    for i in range(3):
+        GPIO.output(cc.CSN, GPIO.HIGH)
+        time.sleep(0.1)
+        print(f"   CSN HIGH: {GPIO.input(cc.CSN)}")
+        
+        GPIO.output(cc.CSN, GPIO.LOW)
+        time.sleep(0.1)
+        print(f"   CSN LOW:  {GPIO.input(cc.CSN)}")
+    
+    GPIO.output(cc.CSN, GPIO.HIGH)  # Return to idle state
+
+def enhanced_reset_sequence(cc):
+    """Try enhanced reset sequence"""
+    print("\n" + "=" * 60)
+    print("ENHANCED RESET SEQUENCE")
+    print("=" * 60)
+    
+    print("1. Power-on reset sequence...")
+    
+    # Ensure CSN is high
+    GPIO.output(cc.CSN, GPIO.HIGH)
+    time.sleep(0.1)
+    
+    # Toggle CSN for power-on reset
+    GPIO.output(cc.CSN, GPIO.LOW)
     time.sleep(0.01)
+    GPIO.output(cc.CSN, GPIO.HIGH)
+    time.sleep(0.05)  # Wait for chip to be ready
     
-    # Check if we entered TX mode
-    state = cc1101.get_marc_state()
-    if state != 0x13:  # TX state
-        print(f"[ERROR] Failed to enter TX mode, MARCSTATE: 0x{state:02X}")
-        return False
+    print("2. Sending SRES strobe...")
+    GPIO.output(cc.CSN, GPIO.LOW)
+    cc.spi_write(0x30)  # SRES
+    GPIO.output(cc.CSN, GPIO.HIGH)
+    time.sleep(0.1)
     
-    print("[INFO] Entered continuous TX mode, sending bits...")
+    print("3. Checking if reset worked...")
+    version = cc.read_register(0x31)
+    print(f"   VERSION after reset: 0x{version:02X}")
     
-    # Send each bit by controlling TX enable
-    for i, bit in enumerate(bit_string):
-        if bit == '1':
-            # Turn ON carrier
-            cc1101.send_strobe(0x35)  # STX (turn on TX)
-        else:
-            # Turn OFF carrier  
-            cc1101.send_strobe(0x36)  # SIDLE (turn off TX)
-            
-        # Wait for bit duration
-        time.sleep(bit_duration_us / 1000000.0)
-        
-        # Debug every 10 bits
-        if (i + 1) % 10 == 0:
-            print(f"[DEBUG] Sent {i + 1} bits...")
-    
-    # Return to idle
-    cc1101.send_strobe(0x36)  # SIDLE
-    print("[INFO] Transmission complete, returned to idle")
-    return True
+    return version == 0x14
 
-def send_traditional_pattern(cc1101, bit_string, repeat=3, inter_frame_delay_ms=10):
-    """
-    Send bit pattern using traditional OOK timing
-    """
-    for rep in range(repeat):
-        print(f"\n=== Transmission {rep + 1} of {repeat} ===")
-        success = send_ook_bits_raw(cc1101, bit_string, bit_duration_us=400)
-        
-        if not success:
-            print(f"[ERROR] Transmission {rep + 1} failed!")
-            return False
-            
-        if rep < repeat - 1:
-            time.sleep(inter_frame_delay_ms / 1000.0)
+def slow_spi_test(cc):
+    """Test with slower SPI timing"""
+    print("\n" + "=" * 60)
+    print("SLOW SPI TEST")
+    print("=" * 60)
     
-    return True
+    # Temporarily modify SPI timing
+    original_spi_write = cc.spi_write
+    original_spi_read = cc.spi_read
+    
+    def slow_spi_write(byte):
+        for i in range(8):
+            GPIO.output(cc.SCK, GPIO.LOW)
+            time.sleep(0.00001)  # 10μs delay
+            GPIO.output(cc.MOSI, (byte & (1 << (7 - i))) != 0)
+            time.sleep(0.00001)
+            GPIO.output(cc.SCK, GPIO.HIGH)
+            time.sleep(0.00001)
+        GPIO.output(cc.SCK, GPIO.LOW)
+    
+    def slow_spi_read():
+        value = 0
+        for i in range(8):
+            GPIO.output(cc.SCK, GPIO.HIGH)
+            time.sleep(0.00001)
+            if GPIO.input(cc.MISO):
+                value |= (1 << (7 - i))
+            time.sleep(0.00001)
+            GPIO.output(cc.SCK, GPIO.LOW)
+            time.sleep(0.00001)
+        return value
+    
+    # Replace with slow versions
+    cc.spi_write = slow_spi_write
+    cc.spi_read = slow_spi_read
+    
+    print("Testing with 10μs SPI delays...")
+    version = cc.read_register(0x31)
+    print(f"VERSION with slow SPI: 0x{version:02X}")
+    
+    # Restore original functions
+    cc.spi_write = original_spi_write
+    cc.spi_read = original_spi_read
+    
+    return version == 0x14
 
-# === Initialize CC1101 ===
-print("Initializing CC1101 for raw OOK transmission...")
+# === Main Debug Program ===
+print("CC1101 Hardware Debug Tool")
+print("Checking your pin assignments:")
+print("  SCK:  GPIO 21")
+print("  MOSI: GPIO 20") 
+print("  MISO: GPIO 19")
+print("  CSN:  GPIO 12")
+print("  GDO0: GPIO 26")
+print("  GDO2: GPIO 16")
+
 cc = CC1101(
     sck=21,
-    mosi=20,
+    mosi=20, 
     miso=19,
     csn=12,
     gdo0=26,
     gdo2=16
 )
 
-# === Basic setup ===
-cc.reset()
-time.sleep(0.2)
-
-# Check communication
-print("Testing SPI communication...")
-version = cc.read_register(0x31)  # VERSION register
-print(f"CC1101 VERSION: 0x{version:02X} (should be 0x14)")
-
-if version != 0x14:
-    print("[ERROR] CC1101 not responding correctly! Check wiring.")
-    exit(1)
-
-# Basic initialization
-cc.init()
-cc.set_frequency(433.92)
-cc.set_power_level(7)  # Max power
-
-print("CC1101 ready for raw OOK transmission!")
-print("=" * 60)
-
-# === Your bit pattern ===
-your_bits = "1000111010001110100010001000111011101110111011101110111010001110100011101110111010001000100011101"
-
 try:
-    # Send using raw bit method
-    success = send_traditional_pattern(cc, your_bits, repeat=5, inter_frame_delay_ms=20)
+    # Initial state
+    print(f"\nInitial CSN state: {GPIO.input(cc.CSN)}")
+    print(f"Initial MISO state: {GPIO.input(cc.MISO)}")
     
-    if success:
-        print("\n" + "=" * 60)
-        print("All transmissions completed successfully!")
+    # Test basic communication
+    test_spi_communication(cc)
+    
+    # Test pin wiring
+    test_pin_wiring(cc)
+    
+    # Try enhanced reset
+    reset_success = enhanced_reset_sequence(cc)
+    
+    if not reset_success:
+        print("\nStandard reset failed, trying slow SPI...")
+        slow_success = slow_spi_test(cc)
+        
+        if slow_success:
+            print("✓ SUCCESS: Slow SPI timing works!")
+            print("Your CC1101 needs slower SPI timing.")
+        else:
+            print("✗ FAILED: Even slow SPI doesn't work.")
+            print("\nPOSSIBLE ISSUES:")
+            print("1. Wiring problem (check connections)")
+            print("2. Power supply (CC1101 needs 3.3V)")
+            print("3. Bad CC1101 module")
+            print("4. GPIO pin conflicts")
     else:
-        print("\n[ERROR] Some transmissions failed!")
+        print("✓ SUCCESS: CC1101 communication working!")
 
-except KeyboardInterrupt:
-    print("\nTransmission interrupted by user")
 except Exception as e:
-    print(f"\nError: {e}")
+    print(f"\nError during testing: {e}")
 finally:
-    # Make sure we're in idle state
-    cc.send_strobe(0x36)  # SIDLE
     GPIO.cleanup()
-    print("GPIO cleanup complete")
+    print("\nGPIO cleanup complete")
