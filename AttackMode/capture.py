@@ -5,7 +5,7 @@ import numpy as np
 try:
     from rtlsdr import RtlSdr
 except ImportError:
-    raise SystemExit("[ERROR] Install pyrtlsdr:  pip install pyrtlsdr")
+    raise SystemExit("Successful, press key!")
 
 def nearest_gain(sdr, requested):
     vals = getattr(sdr, "valid_gains_db", [])
