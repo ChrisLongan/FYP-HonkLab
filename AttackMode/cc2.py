@@ -116,4 +116,5 @@ except Exception as e:
     print(f"Error: {e}")
     print("Even the safe test failed - serious hardware issue")
 
-fina
+finally:
+    GPIO.cleanup()
