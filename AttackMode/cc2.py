@@ -1,9 +1,9 @@
 import RPi.GPIO as GPIO
 import time
 
-class CC1101_BypassVersion:
+class CC1101_FixedFIFO:
     """
-    CC1101 driver that bypasses VERSION check since we know communication works
+    CC1101 driver with proper FIFO handling and communication recovery
     """
     
     def __init__(self, sck, mosi, miso, csn, gdo0, gdo2):
@@ -29,7 +29,7 @@ class CC1101_BypassVersion:
         GPIO.output(self.CSN, GPIO.HIGH)
 
     def spi_write(self, byte):
-        """Working SPI timing from manual test"""
+        """Reliable SPI write with working timing"""
         for i in range(8):
             GPIO.output(self.SCK, GPIO.LOW)
             time.sleep(0.001)
@@ -40,7 +40,7 @@ class CC1101_BypassVersion:
         GPIO.output(self.SCK, GPIO.LOW)
 
     def spi_read(self):
-        """Working SPI timing from manual test"""
+        """Reliable SPI read with working timing"""
         value = 0
         for i in range(8):
             GPIO.output(self.SCK, GPIO.HIGH)
@@ -75,12 +75,66 @@ class CC1101_BypassVersion:
         status = self.spi_read()
         time.sleep(0.001)
         GPIO.output(self.CSN, GPIO.HIGH)
-        print(f"[DEBUG] STROBE 0x{strobe:02X} → status: 0x{status:02X}")
+        
+        # Interpret status
+        chip_ready = (status & 0x80) == 0
+        state = status & 0x0F
+        
+        status_msg = "READY" if chip_ready else "NOT_READY"
+        state_names = {0x00: "SLEEP", 0x01: "IDLE", 0x02: "XOFF", 0x03: "VCOON", 
+                      0x04: "REGON", 0x05: "MANCAL", 0x06: "VCOON_MC", 0x07: "REGON_MC",
+                      0x08: "STARTCAL", 0x09: "BWBOOST", 0x0A: "FS_LOCK", 0x0B: "IFADCON",
+                      0x0C: "ENDCAL", 0x0D: "RX", 0x0E: "RX_END", 0x0F: "RX_RST",
+                      0x10: "TXRX_SWITCH", 0x11: "RXFIFO_OVERFLOW", 0x12: "FSTXON",
+                      0x13: "TX", 0x14: "TX_END", 0x15: "RXTX_SWITCH", 0x16: "TXFIFO_UNDERFLOW"}
+        
+        state_name = state_names.get(state, f"UNKNOWN_0x{state:02X}")
+        print(f"[DEBUG] STROBE 0x{strobe:02X} → 0x{status:02X} ({status_msg}, {state_name})")
+        
         return status
 
-    def reset(self):
-        """Working reset from manual test"""
-        print("[DEBUG] Resetting CC1101...")
+    def recover_from_error(self):
+        """Recover from communication or TX errors"""
+        print("[DEBUG] Attempting error recovery...")
+        
+        # Force reset
+        GPIO.output(self.CSN, GPIO.HIGH)
+        time.sleep(0.1)
+        GPIO.output(self.CSN, GPIO.LOW)
+        time.sleep(0.01)
+        GPIO.output(self.CSN, GPIO.HIGH)
+        time.sleep(0.1)
+        
+        # Send reset strobe
+        GPIO.output(self.CSN, GPIO.LOW)
+        time.sleep(0.001)
+        self.spi_write(0x30)  # SRES
+        time.sleep(0.001)
+        GPIO.output(self.CSN, GPIO.HIGH)
+        time.sleep(0.2)  # Longer wait
+        
+        print("[DEBUG] Reset complete, reinitializing...")
+        
+        # Reinitialize critical registers
+        self.write_register(0x0D, 0x21)  # FREQ2
+        self.write_register(0x0E, 0xB0)  # FREQ1
+        self.write_register(0x0F, 0x6A)  # FREQ0
+        self.write_register(0x12, 0x30)  # ASK/OOK
+        self.write_register(0x18, 0x16)  # MCSM0
+        
+        # Set power
+        GPIO.output(self.CSN, GPIO.LOW)
+        time.sleep(0.001)
+        self.spi_write(0x7E)
+        self.spi_write(0xFF)
+        time.sleep(0.001)
+        GPIO.output(self.CSN, GPIO.HIGH)
+
+    def reset_and_init(self):
+        """Complete reset and initialization"""
+        print("[INFO] Full reset and initialization...")
+        
+        # Hardware reset
         GPIO.output(self.CSN, GPIO.HIGH)
         time.sleep(0.1)
         GPIO.output(self.CSN, GPIO.LOW)
@@ -88,151 +142,148 @@ class CC1101_BypassVersion:
         GPIO.output(self.CSN, GPIO.HIGH)
         time.sleep(0.05)
         
+        # Software reset
         GPIO.output(self.CSN, GPIO.LOW)
         time.sleep(0.001)
         self.spi_write(0x30)  # SRES
         time.sleep(0.001)
         GPIO.output(self.CSN, GPIO.HIGH)
-        time.sleep(0.1)
-
-    def get_marc_state(self):
-        state = self.read_register(0x35) & 0x1F
-        print(f"[DEBUG] MARCSTATE: 0x{state:02X}")
-        return state
-
-    def init_skip_version_check(self):
-        """Initialize without checking VERSION register"""
-        print("[INFO] Initializing CC1101 (skipping VERSION check)...")
+        time.sleep(0.2)
         
-        # Just proceed with initialization - we know communication works from manual test
-        print("[DEBUG] Loading register configuration...")
+        # Load complete configuration
+        config_regs = [
+            (0x0B, 0x06),  # FSCTRL1
+            (0x0D, 0x21),  # FREQ2
+            (0x0E, 0xB0),  # FREQ1  
+            (0x0F, 0x6A),  # FREQ0
+            (0x10, 0xF5),  # MDMCFG4
+            (0x11, 0x83),  # MDMCFG3
+            (0x12, 0x30),  # MDMCFG2 - ASK/OOK
+            (0x13, 0x22),  # MDMCFG1
+            (0x14, 0xF8),  # MDMCFG0
+            (0x15, 0x34),  # CHANNR
+            (0x18, 0x16),  # MCSM0
+            (0x19, 0x1D),  # MCSM1
+            (0x1C, 0xC7),  # FREND1
+            (0x1D, 0x00),  # FREND0
+            (0x1E, 0xB0),  # FSCAL3
+            (0x21, 0xB6),  # FSCAL2
+            (0x22, 0x10),  # FSCAL1
+            (0x23, 0xEA),  # FSCAL0
+            (0x24, 0x2A),  # FSTEST
+            (0x25, 0x00),  # TEST2
+            (0x26, 0x1F),  # TEST1
+            (0x02, 0x06),  # IOCFG0
+            (0x00, 0x29),  # IOCFG2
+            (0x01, 0x2E),  # IOCFG1
+            (0x08, 0x45),  # PKTCTRL0 - Fixed packet length
+            (0x07, 0x04),  # PKTCTRL1
+            (0x06, 0xFF),  # PKTLEN - Max packet length
+        ]
         
-        try:
-            # Load all the registers that made your original code work
-            self.write_register(0x0B, 0x06)  # FSCTRL1
-            self.write_register(0x0D, 0x21)  # FREQ2 
-            self.write_register(0x0E, 0xB0)  # FREQ1
-            self.write_register(0x0F, 0x6A)  # FREQ0 (433.92 MHz)
-            self.write_register(0x10, 0xF5)  # MDMCFG4
-            self.write_register(0x11, 0x83)  # MDMCFG3
-            self.write_register(0x12, 0x13)  # MDMCFG2 (base config)
-            self.write_register(0x15, 0x34)  # MDMCFG0
-            self.write_register(0x18, 0x16)  # MCSM0
-            self.write_register(0x19, 0x1D)  # MCSM1  
-            self.write_register(0x1C, 0xC7)  # FREND1
-            self.write_register(0x1D, 0x00)  # FREND0
-            self.write_register(0x1E, 0xB0)  # FSCAL3
-            self.write_register(0x21, 0xB6)  # FSCAL2
-            self.write_register(0x22, 0x10)  # FSCAL1
-            self.write_register(0x23, 0xEA)  # FSCAL0
-            self.write_register(0x24, 0x2A)  # FSTEST
-            self.write_register(0x25, 0x00)  # TEST2
-            self.write_register(0x26, 0x1F)  # TEST1
-            self.write_register(0x02, 0x06)  # IOCFG0
-            
-            # Set ASK/OOK modulation
-            self.write_register(0x12, 0x30)  # ASK/OOK
-            
-            print("[DEBUG] Registers loaded successfully")
-            
-            # Set power level
-            print("[DEBUG] Setting maximum power...")
-            GPIO.output(self.CSN, GPIO.LOW)
-            time.sleep(0.001)
-            self.spi_write(0x7E)  # PATABLE
-            self.spi_write(0xFF)  # Maximum power
-            time.sleep(0.001)
-            GPIO.output(self.CSN, GPIO.HIGH)
-            time.sleep(0.01)
-            
-            print("[SUCCESS] ✅ Initialization complete (VERSION check skipped)")
-            return True
-            
-        except Exception as e:
-            print(f"[ERROR] Register configuration failed: {e}")
-            return False
-
-    def send_data(self, data):
-        """Send data using working method"""
-        print(f"[INFO] Transmitting {len(data)} bytes...")
+        for addr, value in config_regs:
+            self.write_register(addr, value)
+            time.sleep(0.001)  # Small delay between writes
         
-        # Go to IDLE
-        status = self.send_strobe(0x36)  # SIDLE
-        time.sleep(0.01)
-        
-        # The status 0x0F you saw means IDLE state - that's perfect!
-        if (status & 0x0F) == 0x01:  # IDLE state
-            print("[DEBUG] ✅ Successfully entered IDLE state")
-        
-        # Flush TX FIFO
-        self.send_strobe(0x3A)  # SFTX
-        time.sleep(0.01)
-        
-        # Load data
-        print("[DEBUG] Loading data into TX FIFO...")
+        # Set maximum power
         GPIO.output(self.CSN, GPIO.LOW)
         time.sleep(0.001)
-        self.spi_write(0x7F)  # TX FIFO burst write
-        for i, byte in enumerate(data):
-            self.spi_write(byte)
-            if i % 4 == 0:  # Progress indicator
-                print(f"[DEBUG] Loaded byte {i+1}/{len(data)}: 0x{byte:02X}")
+        self.spi_write(0x7E)  # PATABLE
+        self.spi_write(0xFF)  # Maximum power
         time.sleep(0.001)
         GPIO.output(self.CSN, GPIO.HIGH)
         
+        print("[SUCCESS] ✅ Full initialization complete")
+
+    def send_data_robust(self, data):
+        """Robust data transmission with proper FIFO handling"""
+        print(f"[INFO] Robust transmission of {len(data)} bytes")
+        
+        # Ensure we're in IDLE
+        status = self.send_strobe(0x36)  # SIDLE
+        if (status & 0x80) != 0:  # Chip not ready
+            print("[WARN] Chip not ready, attempting recovery...")
+            self.recover_from_error()
+            status = self.send_strobe(0x36)
+        
+        time.sleep(0.01)
+        
+        # Flush both FIFOs
+        self.send_strobe(0x3A)  # SFTX (flush TX)
+        self.send_strobe(0x3B)  # SFRX (flush RX) 
+        time.sleep(0.01)
+        
+        # Add packet length prefix to prevent underflow
+        packet_data = [len(data)] + data
+        print(f"[DEBUG] Sending packet: length={len(data)}, data={[hex(b) for b in data[:8]]}...")
+        
+        # Write packet to TX FIFO
+        GPIO.output(self.CSN, GPIO.LOW)
+        time.sleep(0.001)
+        self.spi_write(0x3F)  # TX FIFO single write
+        for byte in packet_data:
+            self.spi_write(byte)
+        time.sleep(0.001)
+        GPIO.output(self.CSN, GPIO.HIGH)
+        
+        print(f"[DEBUG] Loaded {len(packet_data)} bytes into TX FIFO")
+        
         # Start transmission
-        print("[DEBUG] Starting transmission...")
         tx_status = self.send_strobe(0x35)  # STX
-        print(f"[DEBUG] TX strobe returned: 0x{tx_status:02X}")
         
-        # Wait for transmission
-        time.sleep(0.2)  # Longer wait
+        if (tx_status & 0x0F) == 0x13:  # TX state
+            print("[DEBUG] ✅ Successfully entered TX state")
+        else:
+            print(f"[WARN] Unexpected TX status: 0x{tx_status:02X}")
         
-        # Check final state
-        final_state = self.get_marc_state()
-        gdo0 = GPIO.input(self.GDO0)
+        # Wait for transmission to complete
+        print("[DEBUG] Waiting for transmission...")
+        time.sleep(0.3)  # Longer wait for complete transmission
         
-        print(f"[DEBUG] After TX - MARCSTATE: 0x{final_state:02X}, GDO0: {gdo0}")
+        # Check final status
+        final_status = self.send_strobe(0x36)  # SIDLE (also gets status)
         
-        return True
+        return (final_status & 0x80) == 0  # Return True if chip ready
 
-def test_bypass_version():
-    """Test CC1101 bypassing VERSION check"""
-    print("CC1101 Test - Bypassing VERSION Check")
-    print("=" * 45)
-    print("Since manual test worked, we'll skip VERSION verification")
-    print()
+def test_robust_transmission():
+    """Test the robust transmission method"""
+    print("CC1101 Robust Transmission Test")
+    print("=" * 40)
     
-    cc = CC1101_BypassVersion(21, 20, 19, 12, 26, 16)
+    cc = CC1101_FixedFIFO(21, 20, 19, 12, 26, 16)
     
-    # Reset
-    cc.reset()
+    # Full reset and initialization
+    cc.reset_and_init()
     
-    # Initialize without VERSION check
-    if cc.init_skip_version_check():
-        print("\n[INFO] Testing transmission...")
+    # Test data - start simple
+    test_patterns = [
+        [0xAA, 0x55],                    # Simple alternating
+        [0xFF, 0x00, 0xFF, 0x00],        # On/off pattern  
+        [0xAA, 0x55, 0xAA, 0x55, 0xAA], # Longer alternating
+        [0x01, 0x02, 0x04, 0x08, 0x10, 0x20, 0x40, 0x80], # Bit walking
+    ]
+    
+    for i, pattern in enumerate(test_patterns):
+        print(f"\n--- Test Pattern {i+1}/4 ---")
+        print(f"[SDR] *** WATCH FOR SIGNAL - Pattern {i+1} ***")
+        print(f"Data: {[hex(b) for b in pattern]}")
         
-        # Test with simple pattern first
-        test_data = [0xAA, 0x55, 0xAA, 0x55, 0xFF, 0x00]
+        success = cc.send_data_robust(pattern)
         
-        for i in range(5):
-            print(f"\n--- Test Transmission {i+1}/5 ---")
-            print(f"[SDR] *** WATCH 433.92 MHz NOW ***")
-            cc.send_data(test_data)
-            time.sleep(2)
+        if success:
+            print("✅ Transmission successful")
+        else:
+            print("❌ Transmission failed, recovering...")
+            cc.recover_from_error()
         
-        return cc
-    else:
-        print("❌ Initialization failed even without VERSION check")
-        return None
+        time.sleep(3)  # Long pause between tests
+    
+    return cc
 
-def send_your_pattern(cc):
-    """Send your custom bit pattern"""
-    if cc is None:
-        return
-    
+def send_custom_bits(cc):
+    """Send your custom bit pattern with robust method"""
     print("\n" + "=" * 50)
-    print("SENDING YOUR CUSTOM BIT PATTERN")
+    print("CUSTOM BIT PATTERN - ROBUST TRANSMISSION")
     print("=" * 50)
     
     your_bits = "1000111010001110100010001000111011101110111011101110111010001110100011101110111010001000100011101"
@@ -248,24 +299,34 @@ def send_your_pattern(cc):
         bytes_list.append(byte_val)
     
     print(f"Pattern: {your_bits}")
-    print(f"Bytes: {[hex(b) for b in bytes_list]}")
+    print(f"Bytes ({len(bytes_list)}): {[hex(b) for b in bytes_list]}")
     print()
     
-    for i in range(10):
-        print(f"[SDR] *** Custom Pattern {i+1}/10 ***")
-        cc.send_data(bytes_list)
-        time.sleep(1)
+    # Send with robust method
+    for i in range(5):
+        print(f"[SDR] *** Custom Pattern Transmission {i+1}/5 ***")
+        success = cc.send_data_robust(bytes_list)
+        
+        if not success:
+            print("[WARN] Transmission failed, recovering...")
+            cc.recover_from_error()
+        
+        time.sleep(2)
     
     print("✅ Custom pattern transmission complete!")
 
 # Main test
 if __name__ == "__main__":
     try:
-        working_cc = test_bypass_version()
+        print("🔴 PREPARE SDR FOR 433.92 MHz")
+        print("Looking for improved transmission signals...")
+        print()
+        
+        working_cc = test_robust_transmission()
         
         if working_cc:
-            input("\nPress ENTER to send custom pattern...")
-            send_your_pattern(working_cc)
+            input("\nDid you see any signals? Press ENTER to send custom pattern...")
+            send_custom_bits(working_cc)
         
     except KeyboardInterrupt:
         print("\nStopped by user")
