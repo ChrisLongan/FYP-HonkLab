@@ -1,7 +1,7 @@
 import RPi.GPIO as GPIO
 import time
 
-class CC1101:
+class CC1101_SlowSPI:
     def __init__(self, sck, mosi, miso, csn, gdo0, gdo2):
         self.SCK = sck
         self.MOSI = mosi
@@ -25,38 +25,53 @@ class CC1101:
         GPIO.output(self.CSN, GPIO.HIGH)
 
     def spi_write(self, byte):
+        """SPI write with proper timing delays"""
         for i in range(8):
             GPIO.output(self.SCK, GPIO.LOW)
+            time.sleep(0.001)  # 1ms delay - much slower!
             GPIO.output(self.MOSI, (byte & (1 << (7 - i))) != 0)
+            time.sleep(0.001)
             GPIO.output(self.SCK, GPIO.HIGH)
+            time.sleep(0.001)
         GPIO.output(self.SCK, GPIO.LOW)
+        time.sleep(0.001)
 
     def spi_read(self):
+        """SPI read with proper timing delays"""
         value = 0
         for i in range(8):
             GPIO.output(self.SCK, GPIO.HIGH)
+            time.sleep(0.001)  # 1ms delay
             if GPIO.input(self.MISO):
                 value |= (1 << (7 - i))
+            time.sleep(0.001)
             GPIO.output(self.SCK, GPIO.LOW)
+            time.sleep(0.001)
         return value
 
     def write_register(self, addr, value):
         GPIO.output(self.CSN, GPIO.LOW)
+        time.sleep(0.001)
         self.spi_write(addr)
         self.spi_write(value)
+        time.sleep(0.001)
         GPIO.output(self.CSN, GPIO.HIGH)
 
     def read_register(self, addr):
         GPIO.output(self.CSN, GPIO.LOW)
+        time.sleep(0.001)
         self.spi_write(addr | 0x80)
         val = self.spi_read()
+        time.sleep(0.001)
         GPIO.output(self.CSN, GPIO.HIGH)
         return val
 
     def send_strobe(self, strobe):
         GPIO.output(self.CSN, GPIO.LOW)
+        time.sleep(0.001)
         self.spi_write(strobe)
         status = self.spi_read()
+        time.sleep(0.001)
         GPIO.output(self.CSN, GPIO.HIGH)
         print(f"[DEBUG] STROBE 0x{strobe:02X} → status byte: 0x{status:02X}")
         return status
@@ -74,10 +89,13 @@ class CC1101:
         GPIO.output(self.CSN, GPIO.HIGH)
         time.sleep(0.045)
         GPIO.output(self.CSN, GPIO.LOW)
+        time.sleep(0.001)
         self.spi_write(0x30)
+        time.sleep(0.001)
         GPIO.output(self.CSN, GPIO.HIGH)
 
     def init(self):
+        # CC1101 register configuration
         self.write_register(0x0B, 0x06)
         self.write_register(0x0D, 0x21)
         self.write_register(0x0E, 0xB0)
@@ -115,17 +133,21 @@ class CC1101:
     def set_power_level(self, level):
         table = [0xC0, 0xC3, 0xC6, 0xC9, 0xCC, 0xCF, 0x12, 0x03]
         GPIO.output(self.CSN, GPIO.LOW)
+        time.sleep(0.001)
         self.spi_write(0x7E)
         self.spi_write(table[level])
+        time.sleep(0.001)
         GPIO.output(self.CSN, GPIO.HIGH)
         time.sleep(0.01)
         print(f"[DEBUG] PATABLE loaded with: 0x{table[level]:02X}")
 
     def spi_write_burst(self, addr, data):
         GPIO.output(self.CSN, GPIO.LOW)
+        time.sleep(0.001)
         self.spi_write(addr | 0x40)  # burst write
         for byte in data:
             self.spi_write(byte)
+        time.sleep(0.001)
         GPIO.output(self.CSN, GPIO.HIGH)
 
     def send_data(self, data):
@@ -160,3 +182,111 @@ class CC1101:
 
         gdo0_state = GPIO.input(self.GDO0)
         print(f"[DEBUG] GDO0 state after TX: {gdo0_state}")
+
+# Test the fixed timing version
+def test_working_cc1101():
+    """Test CC1101 with fixed timing"""
+    print("Testing CC1101 with Fixed SPI Timing")
+    print("=" * 40)
+    
+    # Initialize with slow SPI timing
+    cc = CC1101_SlowSPI(21, 20, 19, 12, 26, 16)
+    
+    # Test communication first
+    print("1. Testing communication...")
+    cc.reset()
+    time.sleep(0.2)
+    
+    version = cc.read_register(0x31)
+    print(f"   VERSION register: 0x{version:02X}")
+    
+    if version != 0x14:
+        print("❌ Still not working - check connections")
+        return False
+    
+    print("✅ Communication working!")
+    
+    # Configure for transmission
+    print("\n2. Configuring for transmission...")
+    cc.init()
+    cc.set_frequency(433.92)
+    cc.set_modulation('ASK_OOK')
+    cc.set_power_level(7)
+    
+    print("✅ Configuration complete!")
+    
+    # Test data transmission
+    print("\n3. Testing data transmission...")
+    test_data = [0xAA, 0x55, 0xAA, 0x55]  # Alternating pattern
+    
+    for i in range(3):
+        print(f"   Transmission {i+1}...")
+        cc.send_data(test_data)
+        time.sleep(1)
+    
+    print("✅ Test transmissions complete!")
+    return True
+
+def binary_string_to_bytes(binary_str):
+    """Convert binary string to bytes"""
+    binary_str = binary_str.replace(' ', '').replace('\n', '')
+    while len(binary_str) % 8 != 0:
+        binary_str = '0' + binary_str
+    
+    bytes_list = []
+    for i in range(0, len(binary_str), 8):
+        byte_chunk = binary_str[i:i+8]
+        byte_value = int(byte_chunk, 2)
+        bytes_list.append(byte_value)
+    
+    return bytes_list
+
+def send_your_bits():
+    """Send your specific bit pattern"""
+    print("\n" + "=" * 40)
+    print("SENDING YOUR CUSTOM BIT PATTERN")
+    print("=" * 40)
+    
+    # Your bit pattern
+    your_bits = "1000111010001110100010001000111011101110111011101110111010001110100011101110111010001000100011101"
+    
+    # Initialize CC1101 with working timing
+    cc = CC1101_SlowSPI(21, 20, 19, 12, 26, 16)
+    cc.reset()
+    time.sleep(0.2)
+    cc.init()
+    cc.set_frequency(433.92)
+    cc.set_modulation('ASK_OOK')
+    cc.set_power_level(7)
+    
+    # Convert to bytes
+    payload = binary_string_to_bytes(your_bits)
+    
+    print(f"Bit pattern: {your_bits}")
+    print(f"Length: {len(your_bits)} bits → {len(payload)} bytes")
+    print(f"Payload: {[hex(b) for b in payload]}")
+    print()
+    
+    # Send multiple times (like key fobs do)
+    for i in range(5):
+        print(f"Transmission {i+1}/5...")
+        cc.send_data(payload)
+        time.sleep(0.1)
+    
+    print("✅ Custom bit pattern transmitted successfully!")
+
+# Run the tests
+if __name__ == "__main__":
+    try:
+        # Test if CC1101 works with fixed timing
+        if test_working_cc1101():
+            # If basic test works, send your custom bits
+            send_your_bits()
+        
+    except KeyboardInterrupt:
+        print("\nStopped by user")
+    except Exception as e:
+        print(f"Error: {e}")
+    finally:
+        GPIO.cleanup()
+        print("GPIO cleanup complete")
