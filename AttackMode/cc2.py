@@ -3,55 +3,71 @@ from cc1101_softspi import CC1101
 import RPi.GPIO as GPIO
 import time
 
-def binary_string_to_bytes(binary_str):
+def send_ook_bits_raw(cc1101, bit_string, bit_duration_us=500):
     """
-    Convert binary string to list of bytes for CC1101 transmission
-    Pads with leading zeros if needed to make complete bytes
+    Send OOK bits by manually controlling the CC1101 carrier
+    This bypasses packet mode and directly controls TX on/off
     """
-    # Remove any spaces or newlines
-    binary_str = binary_str.replace(' ', '').replace('\n', '')
+    print(f"Sending {len(bit_string)} bits with {bit_duration_us}μs per bit")
+    print(f"Bit pattern: {bit_string}")
     
-    # Pad to make it divisible by 8 bits
-    while len(binary_str) % 8 != 0:
-        binary_str = '0' + binary_str
+    # Configure for continuous TX mode
+    cc1101.write_register(0x08, 0x12)  # PKTCTRL0 - disable packet mode
+    cc1101.write_register(0x12, 0x30)  # MDMCFG2 - ASK/OOK, no sync
+    cc1101.write_register(0x02, 0x2F)  # IOCFG0 - high impedance when idle
     
-    # Convert to bytes
-    bytes_list = []
-    for i in range(0, len(binary_str), 8):
-        byte_chunk = binary_str[i:i+8]
-        byte_value = int(byte_chunk, 2)
-        bytes_list.append(byte_value)
+    # Start continuous TX
+    cc1101.send_strobe(0x35)  # STX
+    time.sleep(0.01)
     
-    return bytes_list, binary_str
+    # Check if we entered TX mode
+    state = cc1101.get_marc_state()
+    if state != 0x13:  # TX state
+        print(f"[ERROR] Failed to enter TX mode, MARCSTATE: 0x{state:02X}")
+        return False
+    
+    print("[INFO] Entered continuous TX mode, sending bits...")
+    
+    # Send each bit by controlling TX enable
+    for i, bit in enumerate(bit_string):
+        if bit == '1':
+            # Turn ON carrier
+            cc1101.send_strobe(0x35)  # STX (turn on TX)
+        else:
+            # Turn OFF carrier  
+            cc1101.send_strobe(0x36)  # SIDLE (turn off TX)
+            
+        # Wait for bit duration
+        time.sleep(bit_duration_us / 1000000.0)
+        
+        # Debug every 10 bits
+        if (i + 1) % 10 == 0:
+            print(f"[DEBUG] Sent {i + 1} bits...")
+    
+    # Return to idle
+    cc1101.send_strobe(0x36)  # SIDLE
+    print("[INFO] Transmission complete, returned to idle")
+    return True
 
-def send_key_fob_pattern(cc1101, bit_pattern, repeat_count=5, delay_ms=10):
+def send_traditional_pattern(cc1101, bit_string, repeat=3, inter_frame_delay_ms=10):
     """
-    Send key fob bit pattern with typical repetition
+    Send bit pattern using traditional OOK timing
     """
-    payload, padded_bits = binary_string_to_bytes(bit_pattern)
-    
-    print(f"Original bits: {bit_pattern}")
-    print(f"Padded bits:   {padded_bits}")
-    print(f"Length: {len(bit_pattern)} bits → {len(payload)} bytes")
-    print(f"Payload bytes: {[hex(b) for b in payload]}")
-    print(f"Payload bytes: {payload}")
-    print("-" * 60)
-    
-    for transmission in range(repeat_count):
-        print(f"[TX {transmission + 1}/{repeat_count}] Sending pattern...")
-        cc1101.send_data(payload)
+    for rep in range(repeat):
+        print(f"\n=== Transmission {rep + 1} of {repeat} ===")
+        success = send_ook_bits_raw(cc1101, bit_string, bit_duration_us=400)
         
-        # Check GDO0 state after transmission
-        gdo0_state = GPIO.input(cc1101.GDO0)
-        print(f"[DEBUG] GDO0 state: {gdo0_state}")
-        
-        if transmission < repeat_count - 1:  # Don't delay after last transmission
-            time.sleep(delay_ms / 1000.0)
+        if not success:
+            print(f"[ERROR] Transmission {rep + 1} failed!")
+            return False
+            
+        if rep < repeat - 1:
+            time.sleep(inter_frame_delay_ms / 1000.0)
     
-    print(f"\nCompleted {repeat_count} transmissions!")
+    return True
 
 # === Initialize CC1101 ===
-print("Initializing CC1101...")
+print("Initializing CC1101 for raw OOK transmission...")
 cc = CC1101(
     sck=21,
     mosi=20,
@@ -61,37 +77,46 @@ cc = CC1101(
     gdo2=16
 )
 
-# === Configure the radio ===
-print("Configuring radio...")
+# === Basic setup ===
 cc.reset()
-time.sleep(0.1)
-cc.init()
-cc.set_frequency(433.92)         # 433.92 MHz
-cc.set_modulation('ASK_OOK')     # On-Off Keying for key fobs
-cc.set_power_level(0)            # Maximum power
+time.sleep(0.2)
 
-print("Radio ready!")
+# Check communication
+print("Testing SPI communication...")
+version = cc.read_register(0x31)  # VERSION register
+print(f"CC1101 VERSION: 0x{version:02X} (should be 0x14)")
+
+if version != 0x14:
+    print("[ERROR] CC1101 not responding correctly! Check wiring.")
+    exit(1)
+
+# Basic initialization
+cc.init()
+cc.set_frequency(433.92)
+cc.set_power_level(7)  # Max power
+
+print("CC1101 ready for raw OOK transmission!")
 print("=" * 60)
 
-# === Your specific bit pattern ===
+# === Your bit pattern ===
 your_bits = "1000111010001110100010001000111011101110111011101110111010001110100011101110111010001000100011101"
 
 try:
-    # Send the pattern
-    send_key_fob_pattern(cc, your_bits, repeat_count=3, delay_ms=10)
+    # Send using raw bit method
+    success = send_traditional_pattern(cc, your_bits, repeat=5, inter_frame_delay_ms=20)
     
-    print("\nWaiting 3 seconds...")
-    time.sleep(3)
-    
-    # Send again (simulating button press)
-    print("\nSending second burst...")
-    send_key_fob_pattern(cc, your_bits, repeat_count=3, delay_ms=10)
+    if success:
+        print("\n" + "=" * 60)
+        print("All transmissions completed successfully!")
+    else:
+        print("\n[ERROR] Some transmissions failed!")
 
 except KeyboardInterrupt:
-    print("\nTransmission stopped by user")
+    print("\nTransmission interrupted by user")
 except Exception as e:
     print(f"\nError: {e}")
 finally:
-    # Clean up GPIO
+    # Make sure we're in idle state
+    cc.send_strobe(0x36)  # SIDLE
     GPIO.cleanup()
     print("GPIO cleanup complete")
